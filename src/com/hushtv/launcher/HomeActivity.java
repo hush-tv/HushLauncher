@@ -1833,17 +1833,35 @@ public final class HomeActivity extends Activity {
         int gap = (int) (screenW * 0.016f);
         int tileW = (usable - gap * (columns - 1)) / columns;
         drawerDirty = false;
-        // Two groups: the apps on the home row, in the row's order, then everything else by name.
+        // The apps on the home row, in the row's order, then everything else by name: under Watch,
+        // Listen, Play and Apps and tools if grouping is on, otherwise in one list.
         List<Apps.App> home = apps.homeApps(all), rest = new ArrayList<>(all);
         rest.removeAll(home);
         drawerCount.setText(all.size() + " apps  \u00B7  " + home.size() + " on the home row");
-        for (int group = 0; group < 2; group++) {
-            List<Apps.App> list = group == 0 ? home : rest;
+        List<List<Apps.App>> lists = new ArrayList<>();
+        List<String> names = new ArrayList<>();
+        lists.add(home);
+        names.add("ON YOUR HOME ROW");
+        if (prefs.drawerGroups()) {
+            for (int g = 0; g < Apps.GROUP_NAMES.length; g++) {
+                List<Apps.App> in = new ArrayList<>();
+                for (Apps.App a : rest) if (a.group == g) in.add(a);
+                lists.add(in);
+                names.add(Apps.GROUP_NAMES[g]);
+            }
+        } else {
+            lists.add(rest);
+            names.add(home.isEmpty() ? "ALL APPS" : "EVERYTHING ELSE");
+        }
+        boolean first = true;
+        for (int group = 0; group < lists.size(); group++) {
+            List<Apps.App> list = lists.get(group);
             if (list.isEmpty()) continue;
             TextView heading = text(screenH * 0.019f, 0xB3FFFFFF, "sans-serif-medium");
             heading.setLetterSpacing(0.16f);
-            heading.setText(group == 0 ? "ON YOUR HOME ROW" : home.isEmpty() ? "ALL APPS" : "EVERYTHING ELSE");
-            heading.setPadding(0, group == 0 ? 0 : (int) (screenH * 0.020f), 0, (int) (screenH * 0.018f));
+            heading.setText(names.get(group));
+            heading.setPadding(0, first ? 0 : (int) (screenH * 0.020f), 0, (int) (screenH * 0.018f));
+            first = false;
             GridLayout.LayoutParams hlp = new GridLayout.LayoutParams(
                     GridLayout.spec(GridLayout.UNDEFINED), GridLayout.spec(0, columns));
             drawerGrid.addView(heading, hlp);

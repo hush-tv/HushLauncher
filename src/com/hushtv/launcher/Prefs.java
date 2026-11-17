@@ -61,6 +61,7 @@ final class Prefs {
             new Setting("Screensaver", "saver_dim", "Brightness", 1, "Bright", "Dimmed", "Dark"),
             new Setting("All apps", "down_opens", "Down opens all apps", 0, "Off", "On"),
             new Setting("All apps", "columns", "Columns", 1, "5", "6", "7"),
+            new Setting("All apps", "drawer_groups", "Group by type", 1, "Off", "On"),
             new Setting("System", "auto_update", "Check for updates", 1, "Off", "Once a day"),
     };
 
@@ -155,4 +156,5 @@ final class Prefs {
     long rotateMillis() { return new long[]{0, 30 * 60000L, 60 * 60000L, 24 * 60 * 60000L}[get("wp_rotate")]; }
     boolean downOpensDrawer() { return get("down_opens") == 1; }
     int columns() { return 5 + get("columns"); }
+    boolean drawerGroups() { return get("drawer_groups") == 1; }
 }

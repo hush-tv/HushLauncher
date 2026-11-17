@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
@@ -32,7 +33,44 @@ final class Apps {
         Bitmap packIcon;   // this app's icon from the chosen icon pack, if it has one
         Bitmap packArt;    // this app's picture from the chosen pack folder, if it has one
         boolean ownOnly;   // the user chose this app's own banner, whatever the pack
+        int group = TOOLS; // which heading it goes under in the app drawer
     }
+
+    /** Headings in the app drawer, in the order they're shown. */
+    static final int WATCH = 0, LISTEN = 1, PLAY = 2, TOOLS = 3;
+    static final String[] GROUP_NAMES = {"WATCH", "LISTEN", "PLAY", "APPS AND TOOLS"};
+
+    private static final String[] WATCH_HINTS = {"netflix", "youtube", "primevideo", "amazon.avod", "disney",
+            "hulu", "hbo", "plex", "jellyfin", "emby", "kodi", "xbmc", "stremio", "vlc", "mxtech",
+            "tivimate", "iptv", "m3u", "mpv", "smarttube", "twitch", "bbc", "itv", "channel4", "nowtv", "sky",
+            "paramount", "peacock", "appletv", "crunchyroll", "pluto", "tubi", "dazn", "espn", "video",
+            "player", "movie", "tv.", ".tv"};
+    private static final String[] LISTEN_HINTS = {"spotify", "music", "tidal", "deezer", "soundcloud",
+            "pandora", "audible", "podcast", "radio", "tunein", "sonos", "plexamp"};
+    private static final String[] PLAY_HINTS = {"game", "geforcenow", "stadia", "xcloud", "xbox",
+            "retroarch", "emulator", "moonlight", "steamlink", "playstation", "tegrazone"};
+    /** Sport and live-stream apps whose names might otherwise look like games. */
+    private static final String[] LIVE_HINTS = {"nba", "nfl", "nhl", "mlb", "dazn", "espn", "kick.", "twitch", "fubo"};
+
+    /** Puts an app under Watch, Listen, Play or Apps and tools, from what it says it is and its name. */
+    static int groupOf(String pkg, ApplicationInfo info) {
+        String p = pkg.toLowerCase(java.util.Locale.ROOT);
+        // Names first: apps often label themselves oddly (VLC says audio, file managers say game).
+        for (String h : LIVE_HINTS) if (p.contains(h)) return WATCH;
+        for (String h : TOOL_HINTS) if (p.contains(h)) return TOOLS;
+        for (String h : PLAY_HINTS) if (p.contains(h)) return PLAY;
+        for (String h : LISTEN_HINTS) if (p.contains(h)) return LISTEN;
+        for (String h : WATCH_HINTS) if (p.contains(h)) return WATCH;
+        if (info != null) {
+            if (info.category == ApplicationInfo.CATEGORY_VIDEO) return WATCH;
+            if (info.category == ApplicationInfo.CATEGORY_AUDIO) return LISTEN;
+            if (info.category == ApplicationInfo.CATEGORY_GAME || (info.flags & ApplicationInfo.FLAG_IS_GAME) != 0) return PLAY;
+        }
+        return TOOLS;
+    }
+
+    private static final String[] TOOL_HINTS = {"settings", "downloader", "browser", "file", "xplore",
+            "vending", "vpn", "gallery", "weather", "mapper", "launcher", "upgrade"};
 
     /**
      * Apps put first on a new user's home row when they are installed, in this order. Anything
@@ -86,6 +124,7 @@ final class Apps {
                 app.pkg = ai.packageName;
                 app.component = new ComponentName(ai.packageName, ai.name);
                 app.label = ai.packageName;
+                app.group = groupOf(ai.packageName, ai.applicationInfo);
                 try {
                     CharSequence label = ri.loadLabel(pm);
                     if (label != null) app.label = label.toString();
@@ -264,6 +303,7 @@ final class Apps {
             App a = new App();
             a.pkg = (String) spec[0];
             a.label = (String) spec[1];
+            a.group = groupOf(a.pkg, null);
             a.banner = Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888);
             Canvas c = new Canvas(a.banner);
             c.drawColor((Integer) spec[2]);
