@@ -29,7 +29,7 @@
         <package android:name="com.google.android.apps.tv.launcherx" />
     </queries>
     <application android:label="Hush" android:icon="@drawable/icon" android:banner="@drawable/banner"
-        android:theme="@android:style/Theme.DeviceDefault.NoActionBar" android:allowBackup="true">
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar" android:allowBackup="false">
         <activity android:name=".HomeActivity" android:exported="true" android:launchMode="singleTask"
             android:excludeFromRecents="true" android:screenOrientation="landscape"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize">
@@ -46,6 +46,8 @@
             </intent-filter>
         </activity>
         <receiver android:name=".Updater$Result" android:exported="false" />
+        <receiver android:name=".BackupReceiver" android:exported="true"
+            android:permission="android.permission.DUMP" />
         <activity android:name=".SaverPreview" android:exported="false"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
         <service android:name=".ClockDream" android:exported="true" android:label="Hush Launcher"
@@ -55,7 +57,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </service>
-        <!-- Fire TV only, and off until enabled as an accessibility service. See README. -->
+        <!-- For Fire TV and Google TV, and off until enabled as an accessibility service. See README. -->
         <service android:name=".HomeRedirectService" android:exported="true" android:label="Hush Home button"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>

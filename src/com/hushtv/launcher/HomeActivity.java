@@ -284,7 +284,12 @@ public final class HomeActivity extends Activity {
     protected void onResume() {
         super.onResume();
         resumed = true;
-        getWindow().getDecorView().postDelayed(this::maybeCheckForUpdate, 5000);
+        getWindow().getDecorView().postDelayed(updateCheck, 5000);
+        Updater.failed = () -> row.post(() -> {
+            if (isDestroyed()) return;
+            notice("The update wasn't installed");
+            refreshUpdateRow();
+        });
         if (!setupDone() && overlay == NONE && getSharedPreferences("home", MODE_PRIVATE).getBoolean("setup_shown", false)
                 && !isHomeScreen()) {
             getWindow().getDecorView().postDelayed(() -> {
@@ -336,6 +341,8 @@ public final class HomeActivity extends Activity {
         resumed = false;
         updateStars();
         row.removeCallbacks(goAmbient);
+        getWindow().getDecorView().removeCallbacks(updateCheck);
+        Updater.failed = null;
         unregisterReceiver(tick);
         connectivity.unregisterNetworkCallback(networkCallback);
     }
@@ -400,6 +407,7 @@ public final class HomeActivity extends Activity {
      * {@code adb shell am start -n com.hushtv.launcher/.HomeActivity --es wallpaper file:/path --es icon_pack dir:Name}.
      */
     private boolean applyIntentConfig(Intent intent) {
+        if (!testHooksAllowed()) return false;
         boolean changed = false;
         String wallpaper = intent.getStringExtra("wallpaper");
         if (wallpaper != null) {
@@ -461,7 +469,7 @@ public final class HomeActivity extends Activity {
             intent.removeExtra("hold");
             row.postDelayed(() -> playHold(hold.split(","), 0), 600);
         }
-        // Sets the weather town without the on-screen keyboard: --es weather_place "Leeds"
+        // Sets the weather town without the on-screen keyboard: --es weather_place "London"
         String town = intent.getStringExtra("weather_place");
         if (town != null) {
             intent.removeExtra("weather_place");
@@ -1149,11 +1157,14 @@ public final class HomeActivity extends Activity {
             buildSettingsList("update");
     }
 
+    private final Runnable updateCheck = this::maybeCheckForUpdate;
+
     /** Daily background check; a quiet notice when a new version appears. */
     private void maybeCheckForUpdate() {
         if (!prefs.autoUpdate()) return;
         final boolean had = Updater.updateAvailable(this);
         Updater.check(this, false, () -> {
+            if (isDestroyed()) return;
             if (!had && Updater.updateAvailable(this))
                 notice("Hush " + Updater.latestVersion + " is available: Settings \u2192 System \u2192 Updates");
             refreshUpdateRow();
@@ -1491,7 +1502,12 @@ public final class HomeActivity extends Activity {
 
     /** Preview mode with placeholder tiles: {@code am start --ez demo true}. Never saves the home row. */
     private boolean isDemo() {
-        return getIntent().getBooleanExtra("demo", false);
+        return testHooksAllowed() && getIntent().getBooleanExtra("demo", false);
+    }
+
+    /** The computer hooks above only work in a debuggable build (./build.sh --debuggable), so other apps can't use them. */
+    private boolean testHooksAllowed() {
+        return (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
     }
 
     private void buildRow() {

@@ -5,7 +5,10 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageInstaller;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -16,10 +19,14 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Arrays;
 
 /**
  * In-app updates from the project's GitHub releases. A check sends one request to GitHub's
@@ -29,6 +36,8 @@ import java.net.URL;
  */
 final class Updater {
     private static final String LATEST = "https://api.github.com/repos/hush-tv/HushLauncher/releases/latest";
+    /** The only place an update is downloaded from. */
+    private static final String DOWNLOADS = "https://github.com/hush-tv/HushLauncher/releases/download/";
     private static final long DAY = 24 * 60 * 60 * 1000L;
 
     interface Listener { void changed(); }
@@ -38,6 +47,8 @@ final class Updater {
     static volatile int state; // 0 idle, 1 checking, 2 downloading, 3 failed
     static volatile String error;
     static volatile int progress; // download percent
+    /** Told when Android reports that an install failed; the home screen sets it while it's open. */
+    static volatile Listener failed;
 
     private Updater() {}
 
@@ -50,7 +61,7 @@ final class Updater {
     }
 
     static boolean updateAvailable(Context ctx) {
-        return latestVersion != null && newer(latestVersion, installedVersion(ctx));
+        return latestVersion != null && apkUrl != null && newer(latestVersion, installedVersion(ctx));
     }
 
     /** True if version a (like "1.28") is newer than b. */
@@ -77,7 +88,7 @@ final class Updater {
         long last = sp(app).getLong("update_checked", 0);
         if (!force && System.currentTimeMillis() - last < DAY) {
             if (latestVersion == null) latestVersion = sp(app).getString("update_latest", null);
-            if (apkUrl == null) apkUrl = sp(app).getString("update_url", null);
+            if (apkUrl == null) apkUrl = trusted(sp(app).getString("update_url", null));
             done.changed();
             return;
         }
@@ -94,7 +105,7 @@ final class Updater {
                 JSONArray assets = rel.optJSONArray("assets");
                 for (int i = 0; assets != null && i < assets.length(); i++) {
                     JSONObject a = assets.getJSONObject(i);
-                    if (a.optString("name").endsWith(".apk")) url = a.getString("browser_download_url");
+                    if (a.optString("name").endsWith(".apk")) url = trusted(a.getString("browser_download_url"));
                 }
                 latestVersion = tag.replaceFirst("^v", "");
                 apkUrl = url;
@@ -114,12 +125,21 @@ final class Updater {
         if (ctx.getPackageManager().canRequestPackageInstalls()) return true;
         Intent i = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + ctx.getPackageName()))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        // As in HomeActivity.startSafely: keep the Fire TV Home redirect from covering the setting.
+        HomeRedirectService.pause(3000);
         try {
             ctx.startActivity(i);
         } catch (Exception e) {
-            ctx.startActivity(new Intent(Settings.ACTION_SECURITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            try {
+                ctx.startActivity(new Intent(Settings.ACTION_SECURITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } catch (Exception ignored) { }
         }
         return false;
+    }
+
+    /** The address if it is one of the project's own release downloads, otherwise null. */
+    private static String trusted(String url) {
+        return url != null && url.startsWith(DOWNLOADS) ? url : null;
     }
 
     /** Downloads the newest release and hands it to Android's installer. */
@@ -133,28 +153,37 @@ final class Updater {
         changed.changed();
         final Handler main = new Handler(Looper.getMainLooper());
         new Thread(() -> {
+            File apk = new File(app.getCacheDir(), "update.apk");
+            PackageInstaller pi = app.getPackageManager().getPackageInstaller();
+            int id = -1;
             try {
-                PackageInstaller pi = app.getPackageManager().getPackageInstaller();
+                HttpURLConnection c = open(url);
+                long total = c.getContentLengthLong(), done = 0;
+                try (InputStream in = c.getInputStream(); OutputStream out = new FileOutputStream(apk)) {
+                    byte[] buf = new byte[64 * 1024];
+                    int n, lastPct = -1;
+                    while ((n = in.read(buf)) > 0) {
+                        out.write(buf, 0, n);
+                        done += n;
+                        int pct = total > 0 ? (int) (done * 100 / total) : 0;
+                        if (pct != lastPct) {
+                            lastPct = pct;
+                            progress = pct;
+                            main.post(changed::changed);
+                        }
+                    }
+                }
+                if (total > 0 && done != total) throw new Exception("incomplete download");
+                if (!sameApp(app, apk)) throw new Exception("not signed by the same key");
                 PackageInstaller.SessionParams params =
                         new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
                 params.setAppPackageName(app.getPackageName());
-                int id = pi.createSession(params);
+                id = pi.createSession(params);
                 try (PackageInstaller.Session session = pi.openSession(id)) {
-                    HttpURLConnection c = open(url);
-                    long total = c.getContentLengthLong(), done = 0;
-                    try (InputStream in = c.getInputStream(); OutputStream out = session.openWrite("hush.apk", 0, total)) {
+                    try (InputStream in = new FileInputStream(apk); OutputStream out = session.openWrite("hush.apk", 0, apk.length())) {
                         byte[] buf = new byte[64 * 1024];
-                        int n, lastPct = -1;
-                        while ((n = in.read(buf)) > 0) {
-                            out.write(buf, 0, n);
-                            done += n;
-                            int pct = total > 0 ? (int) (done * 100 / total) : 0;
-                            if (pct != lastPct) {
-                                lastPct = pct;
-                                progress = pct;
-                                main.post(changed::changed);
-                            }
-                        }
+                        int n;
+                        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
                         session.fsync(out);
                     }
                     int flags = PendingIntent.FLAG_UPDATE_CURRENT
@@ -165,11 +194,33 @@ final class Updater {
                 }
                 state = 0;
             } catch (Exception e) {
+                if (id != -1) {
+                    try { pi.abandonSession(id); } catch (Exception ignored) { }
+                }
                 state = 3;
                 error = "Download failed";
             }
+            apk.delete();
             main.post(changed::changed);
         }, "update-install").start();
+    }
+
+    /** True if the downloaded file is this app, signed with the same key as the installed copy. */
+    @SuppressWarnings("deprecation")
+    private static boolean sameApp(Context ctx, File apk) throws Exception {
+        PackageManager pm = ctx.getPackageManager();
+        int flag = Build.VERSION.SDK_INT >= 28 ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+        PackageInfo theirs = pm.getPackageArchiveInfo(apk.getPath(), flag);
+        if (theirs == null || !ctx.getPackageName().equals(theirs.packageName)) return false;
+        PackageInfo ours = pm.getPackageInfo(ctx.getPackageName(), flag);
+        Signature[] s = signers(theirs);
+        return s != null && s.length > 0 && Arrays.equals(s, signers(ours));
+    }
+
+    @SuppressWarnings("deprecation")
+    private static Signature[] signers(PackageInfo info) {
+        if (Build.VERSION.SDK_INT < 28) return info.signatures;
+        return info.signingInfo == null ? null : info.signingInfo.getApkContentsSigners();
     }
 
     private static HttpURLConnection open(String address) throws Exception {
@@ -216,9 +267,13 @@ final class Updater {
                     confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     try { ctx.startActivity(confirm); } catch (Exception ignored) { }
                 }
+            } else if (status == PackageInstaller.STATUS_FAILURE_ABORTED) {
+                state = 0; // the user said no
             } else if (status != PackageInstaller.STATUS_SUCCESS) {
                 state = 3;
                 error = "Android didn't install the update";
+                Listener l = failed;
+                if (l != null) l.changed();
             }
         }
     }

@@ -92,7 +92,7 @@ final class Weather {
     }
 
     /**
-     * Looks a town up by name and makes it the chosen one. Returns its full name ("Leeds,
+     * Looks a town up by name and makes it the chosen one. Returns its full name ("London,
      * United Kingdom"), or null if nothing by that name was found. Call off the UI thread.
      */
     String choosePlace(String typed) throws IOException {

@@ -8,7 +8,7 @@ PKG=com.hushtv.launcher; DIR=/sdcard/Android/data/$PKG/files
 OUT="$(cd "$(dirname "$0")/.." && pwd)/extras/backups/$(date +%Y-%m-%d_%H%M)"
 "$ADB" connect "$DEV" >/dev/null
 "$ADB" -s "$DEV" shell rm -f "$DIR/backup/launcher-backup.json"
-"$ADB" -s "$DEV" shell am start -n $PKG/.HomeActivity --ez backup true >/dev/null
+"$ADB" -s "$DEV" shell am broadcast -n $PKG/.BackupReceiver -a $PKG.BACKUP >/dev/null
 for i in 1 2 3 4 5 6 7 8 9 10; do
   "$ADB" -s "$DEV" shell "[ -f $DIR/backup/launcher-backup.json ]" && break; sleep 1
 done

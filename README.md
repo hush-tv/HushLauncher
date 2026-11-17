@@ -12,7 +12,8 @@ wallpaper and a clock.
 
 It is free, open source, about 3 MB, and has no account, analytics or advertising.
 
-**Install on your TV:** enter code **2573570** in the Downloader app.
+**Install on your TV:** enter code **2573570** in the Downloader app. The code is a shortcut to
+the download link on GitHub.
 
 ![Home screen](preview/shots/home.png)
 
@@ -26,7 +27,7 @@ It is free, open source, about 3 MB, and has no account, analytics or advertisin
 
 **Home screen**
 - One row of apps, chosen and ordered by you. The selected tile stays in place and the row
-  glides beneath it.
+  moves under it.
 - Corner buttons for network status, VPN status, all apps and settings.
 - Optional app names, greeting, clock (12 or 24 hour, top left or right, three sizes) and local weather.
 - Corner icons can be hidden.
@@ -36,7 +37,7 @@ It is free, open source, about 3 MB, and has no account, analytics or advertisin
 - Tile size, position, spacing, corner shape and finish (flat, glass or deep), a dark tile
   style, and softening of very bright tile artwork.
 - Selected-tile effects: zoom, outline in a choice of colours or one taken from the wallpaper,
-  glow, a soft pool of light in the app's own colour, and a light sweep across the tile.
+  glow, a soft light behind the tile in the app's own colour, and a light sweep across the tile.
   Other tiles can be dimmed, and animation speed set to instant, fast or smooth.
 - Icon packs: installed Android icon-pack apps or folders of images, previewed live on your
   own tiles. Any tile can also be given a picture of its own.
@@ -56,7 +57,7 @@ It is free, open source, about 3 MB, and has no account, analytics or advertisin
   every 1, 5 or 15 minutes, at three brightness levels.
 
 **Privacy**
-- Tracker blocking for the whole TV (see below).
+- Tracker blocking for the whole TV (needs one command from a computer, see below).
 - Shortcuts to the TV's ad-personalisation and usage-data settings.
 
 **Everything else**
@@ -67,10 +68,10 @@ It is free, open source, about 3 MB, and has no account, analytics or advertisin
 
 ## Privacy
 
-**What Hush collects:** nothing. Hush has no account, analytics, crash reporting or ads. It makes
-only two kinds of network request: the optional weather (see [Weather](#weather)), off by
-default, and the update check (see [Updates](#updates)), which asks GitHub once a day whether a
-newer version exists and can be switched off.
+**What Hush collects:** Hush itself collects nothing: no account, analytics, crash reporting or
+ads. Two optional features talk to outside services, which see your IP address like any website:
+the daily update check (GitHub, see [Updates](#updates)), which can be switched off, and the
+weather (Open-Meteo, see [Weather](#weather)), off by default.
 
 **Tracker blocking (Android 9 or newer):** Settings → Privacy can switch the TV to an encrypted DNS service that
 refuses to look up known advertising and tracking domains. It applies to every app on the TV
@@ -83,6 +84,8 @@ automatically.
 | AdGuard | Many ads and trackers |
 | Mullvad | Many ads and trackers |
 | Quad9 | Known malware and phishing sites |
+
+The service you choose sees which sites your TV looks up. All three publish no-logging policies.
 
 This uses Android's built-in Private DNS feature, which needs Android 9 or newer; on Android 8
 the tracker-blocking choices are not shown. Android only lets an app
@@ -115,7 +118,8 @@ adb shell pm grant com.hushtv.launcher android.permission.WRITE_SECURE_SETTINGS
 | Nvidia Shield TV (all models) | Fully tested |
 | Chromecast with Google TV, Google TV Streamer, onn, Xiaomi Mi Box | Supported |
 | TVs with Android TV or Google TV built in | Supported |
-| Amazon Fire TV and Fire TV Stick | Supported; Home button through the [Hush Home button](#home-button-on-fire-tv-and-google-tv) service |
+| Amazon Fire TV and Fire TV Stick (Fire OS) | Supported; Home button through the [Hush Home button](#home-button-on-fire-tv-and-google-tv) service. An Amazon update may switch that service off; turn it on again in Accessibility |
+| Newer Fire TV devices on Vega OS | Not supported: Vega OS is not Android |
 | Android TV boxes (Formuler, Dynalink, Homatics and others) | Supported |
 | Apple TV, Roku, Samsung (Tizen), LG (webOS) | Not possible: these do not run Android apps |
 | Android phones and tablets | Not supported: Hush is designed for a remote, not touch |
@@ -227,7 +231,8 @@ Files can be copied with `adb push` or from a USB drive using the TV's file mana
 ## Uninstalling
 
 1. Turn off **Hush Home button** in Accessibility if you use it, and if tracker blocking is on,
-   set Settings → Privacy → **Don't block**. Android keeps both after an app is removed.
+   set Settings → Privacy → **Don't block**. Android keeps both after an app is removed, so
+   without this the TV would go on using the blocking DNS service with no easy way to turn it off.
 2. Remove Hush from the TV's Settings → Apps, or with `adb uninstall com.hushtv.launcher`.
 3. Press Home. The TV goes back to its own home screen. If you set Hush as the home screen over
    adb, that choice is cleared automatically when Hush is removed.
@@ -240,7 +245,8 @@ is in the All apps drawer (Up, then the grid button).
 
 **Do I need a computer?** No, except for tracker blocking (one command), and on Fire TV versions
 that hide Hush Home button from Accessibility. An [AI assistant](SETUP_WITH_CLAUDE.md) can do
-both for you.
+both for you; it needs Claude Code or a similar tool on a computer, and developer mode turned on
+on the TV.
 
 **Does the TV switch back to its own home screen after a system update?** Usually not. If it
 does, press Home and choose Hush again, or run the `set-home-activity` command.

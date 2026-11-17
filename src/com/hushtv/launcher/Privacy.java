@@ -39,6 +39,9 @@ final class Privacy {
 
     interface Result { void done(boolean ok); }
 
+    /** Bumped by every set(), so the check from an earlier choice stops once a newer one is made. */
+    private static int generation;
+
     private Privacy() {}
 
     static boolean supported() {
@@ -72,6 +75,7 @@ final class Privacy {
      */
     static boolean set(Context ctx, int index, Result result) {
         if (!canChange(ctx)) return false;
+        final int gen = ++generation;
         final Context app = ctx.getApplicationContext();
         final ContentResolver cr = app.getContentResolver();
         final String oldMode = Settings.Global.getString(cr, MODE);
@@ -81,21 +85,25 @@ final class Privacy {
             sp.edit().putBoolean(SAVED, true).putString(PREV_MODE, oldMode).putString(PREV_HOST, oldHost).apply();
         }
         try {
-            String host = SERVICES[index][2];
-            if (host == null) {
-                write(cr, sp.getString(PREV_MODE, "opportunistic"), sp.getString(PREV_HOST, null));
+            if (SERVICES[index][2] == null) {
+                String mode = sp.getString(PREV_MODE, "opportunistic");
+                if (!"off".equals(mode) && !"opportunistic".equals(mode) && !"hostname".equals(mode)) mode = "opportunistic";
+                write(cr, mode, sp.getString(PREV_HOST, null));
+                sp.edit().putBoolean(SAVED, false).apply();
                 result.done(true);
                 return true;
             }
-            write(cr, "hostname", host);
+            write(cr, "hostname", SERVICES[index][2]);
         } catch (SecurityException e) {
             return false;
         }
+        final String host = SERVICES[index][2];
         final Handler h = new Handler(Looper.getMainLooper());
         final long start = System.currentTimeMillis();
         h.postDelayed(new Runnable() {
             @Override public void run() {
-                if (online(app)) {
+                if (gen != generation) return;
+                if (online(app, host)) {
                     result.done(true);
                 } else if (System.currentTimeMillis() - start < 8000) {
                     h.postDelayed(this, 1000);
@@ -113,8 +121,8 @@ final class Privacy {
         Settings.Global.putString(cr, MODE, mode == null ? "opportunistic" : mode);
     }
 
-    /** True when the active network is validated and, if strict Private DNS is on, using it. */
-    private static boolean online(Context ctx) {
+    /** True when the active network is validated and using Private DNS through {@code host}. */
+    private static boolean online(Context ctx, String host) {
         ConnectivityManager cm = ctx.getSystemService(ConnectivityManager.class);
         if (cm == null) return true;
         Network n = cm.getActiveNetwork();
@@ -122,6 +130,6 @@ final class Privacy {
         NetworkCapabilities caps = cm.getNetworkCapabilities(n);
         if (caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return false;
         LinkProperties lp = cm.getLinkProperties(n);
-        return lp == null || lp.isPrivateDnsActive();
+        return lp == null || (lp.isPrivateDnsActive() && host.equalsIgnoreCase(lp.getPrivateDnsServerName()));
     }
 }

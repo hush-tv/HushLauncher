@@ -10,7 +10,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -23,6 +26,9 @@ final class Backup {
     private static final String[] STORES = {"settings", "home"};
     /** Describes this boot of this device, so it is not carried over. */
     static final String BOOT_SEEN = "boot_seen";
+    /** Belong to this install, not to the user's choices, so a restore never brings them back. */
+    private static final List<String> NOT_RESTORED =
+            Arrays.asList("update_checked", "update_latest", "update_url", "boot_app");
 
     private Backup() {
     }
@@ -75,16 +81,19 @@ final class Backup {
             }
             JSONObject root = new JSONObject(new String(data, "UTF-8"));
             if (root.optInt("version") != 1) throw new IOException("unknown backup version");
+            // Read everything first, so a damaged file throws before any setting is cleared.
+            List<SharedPreferences.Editor> edits = new ArrayList<>();
             for (String store : STORES) {
                 JSONObject in = root.optJSONObject(store);
                 if (in == null) continue;
                 SharedPreferences sp = ctx.getSharedPreferences(store, Context.MODE_PRIVATE);
                 SharedPreferences.Editor ed = sp.edit();
-                int bootSeen = sp.getInt(BOOT_SEEN, Integer.MIN_VALUE);
                 ed.clear();
-                if (sp.contains(BOOT_SEEN)) ed.putInt(BOOT_SEEN, bootSeen);
+                for (String key : NOT_RESTORED) keep(sp, ed, key);
+                keep(sp, ed, BOOT_SEEN);
                 for (Iterator<String> it = in.keys(); it.hasNext(); ) {
                     String key = it.next();
+                    if (key.equals(BOOT_SEEN) || NOT_RESTORED.contains(key)) continue;
                     JSONObject item = in.getJSONObject(key);
                     switch (item.getString("t")) {
                         case "i": ed.putInt(key, item.getInt("v")); break;
@@ -95,10 +104,21 @@ final class Backup {
                         default: break;
                     }
                 }
-                ed.commit();
+                edits.add(ed);
             }
+            for (SharedPreferences.Editor ed : edits) ed.commit();
         } catch (JSONException | RuntimeException e) {
             throw new IOException(e);
         }
+    }
+
+    /** Puts the current value of {@code key} back after the editor's clear(). */
+    private static void keep(SharedPreferences sp, SharedPreferences.Editor ed, String key) {
+        Object v = sp.getAll().get(key);
+        if (v instanceof Integer) ed.putInt(key, (Integer) v);
+        else if (v instanceof Long) ed.putLong(key, (Long) v);
+        else if (v instanceof Boolean) ed.putBoolean(key, (Boolean) v);
+        else if (v instanceof Float) ed.putFloat(key, (Float) v);
+        else if (v instanceof String) ed.putString(key, (String) v);
     }
 }

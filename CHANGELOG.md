@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.30
+
+- Updates are only downloaded from the project's GitHub releases, and the file is checked before
+  installing: it must be complete and signed with the same key as the installed copy.
+- Saying no on Android's install screen no longer shows an error; a real install failure now
+  shows a notice.
+- Restoring a backup no longer brings back the old update check or the start-up app, and a
+  damaged backup file leaves the current settings untouched.
+- Tracker blocking: switching services quickly no longer lets an earlier check undo a later
+  choice, the check now confirms the chosen service is the one in use, and "Don't block" always
+  puts back a valid setting.
+- The commands for testing from a computer only work in debug builds, so other apps on the TV
+  can't use them.
+- Android's own cloud backup of Hush's settings is turned off.
+
 ## 1.29
 
 Fixes from testing setup as a new user on an Nvidia Shield.
