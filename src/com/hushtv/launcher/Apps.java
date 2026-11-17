@@ -38,7 +38,7 @@ final class Apps {
 
     /** Headings in the app drawer, in the order they're shown. */
     static final int WATCH = 0, LISTEN = 1, PLAY = 2, TOOLS = 3;
-    static final String[] GROUP_NAMES = {"WATCH", "LISTEN", "PLAY", "APPS AND TOOLS"};
+    static final String[] GROUP_NAMES = {"Watch", "Listen", "Play", "Apps and tools"};
 
     private static final String[] WATCH_HINTS = {"netflix", "youtube", "primevideo", "amazon.avod", "disney",
             "hulu", "hbo", "plex", "jellyfin", "emby", "kodi", "xbmc", "stremio", "vlc", "mxtech",

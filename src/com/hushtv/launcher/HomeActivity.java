@@ -1841,7 +1841,7 @@ public final class HomeActivity extends Activity {
         List<List<Apps.App>> lists = new ArrayList<>();
         List<String> names = new ArrayList<>();
         lists.add(home);
-        names.add("ON YOUR HOME ROW");
+        names.add("On your home row");
         if (prefs.drawerGroups()) {
             for (int g = 0; g < Apps.GROUP_NAMES.length; g++) {
                 List<Apps.App> in = new ArrayList<>();
@@ -1851,23 +1851,41 @@ public final class HomeActivity extends Activity {
             }
         } else {
             lists.add(rest);
-            names.add(home.isEmpty() ? "ALL APPS" : "EVERYTHING ELSE");
+            names.add(home.isEmpty() ? "All apps" : "Everything else");
         }
         boolean first = true;
         for (int group = 0; group < lists.size(); group++) {
             List<Apps.App> list = lists.get(group);
             if (list.isEmpty()) continue;
-            TextView heading = text(screenH * 0.019f, 0xB3FFFFFF, "sans-serif-medium");
-            heading.setLetterSpacing(0.16f);
-            heading.setText(names.get(group));
-            heading.setPadding(0, first ? 0 : (int) (screenH * 0.020f), 0, (int) (screenH * 0.018f));
+            // A heading clearly unlike an app name: a larger title beside a short bar in the
+            // outline colour (softened), with a faint count of the apps under it.
+            LinearLayout heading = new LinearLayout(this);
+            heading.setOrientation(LinearLayout.HORIZONTAL);
+            heading.setGravity(Gravity.CENTER_VERTICAL);
+            View bar = new View(this);
+            bar.setBackgroundColor((prefs.accent() & 0x00FFFFFF) | 0xE6000000);
+            int barH = (int) (screenH * 0.040f);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(Math.max(3, (int) (screenH * 0.006f)), barH);
+            blp.rightMargin = (int) (screenH * 0.014f);
+            heading.addView(bar, blp);
+            TextView title = text(screenH * 0.042f, 0xF2FFFFFF, "sans-serif-medium");
+            title.setText(names.get(group));
+            heading.addView(title);
+            TextView count = text(screenH * 0.030f, 0x80FFFFFF, "sans-serif");
+            count.setText(String.valueOf(list.size()));
+            count.setPadding((int) (screenH * 0.014f), 0, 0, 0);
+            heading.addView(count);
+            heading.setContentDescription(names.get(group) + ", " + list.size() + (list.size() == 1 ? " app" : " apps"));
+            if (android.os.Build.VERSION.SDK_INT >= 28) heading.setAccessibilityHeading(true);
+            heading.setPadding(0, first ? 0 : (int) (screenH * 0.040f), 0, (int) (screenH * 0.022f));
             first = false;
             GridLayout.LayoutParams hlp = new GridLayout.LayoutParams(
-                    GridLayout.spec(GridLayout.UNDEFINED), GridLayout.spec(0, columns));
+                    GridLayout.spec(GridLayout.UNDEFINED), GridLayout.spec(0, columns, GridLayout.FILL));
+            hlp.width = usable;
             drawerGrid.addView(heading, hlp);
             for (int i = 0; i < list.size(); i++) {
                 final Apps.App app = list.get(i);
-                TileView tile = new TileView(this, app, prefs, tileW, 2, 1.25f, false);
+                TileView tile = new TileView(this, app, prefs, tileW, 1, 1.25f, false);
                 tile.capZoom(1.07f); // neighbours are close in the grid, so the selected tile grows less
                 tile.setOnClickListener(v -> launch(app));
                 tile.setOnLongClickListener(v -> {
