@@ -19,6 +19,7 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.util.TypedValue;
@@ -284,6 +285,15 @@ public final class HomeActivity extends Activity {
         super.onResume();
         resumed = true;
         getWindow().getDecorView().postDelayed(this::maybeCheckForUpdate, 5000);
+        if (!setupDone() && overlay == NONE && getSharedPreferences("home", MODE_PRIVATE).getBoolean("setup_shown", false)
+                && !isHomeScreen()) {
+            getWindow().getDecorView().postDelayed(() -> {
+                if (overlay != NONE) return;
+                showOverlay(SETTINGS);
+                settingsPage = "Get started";
+                buildSettingsList(null);
+            }, 700);
+        }
         IntentFilter time = new IntentFilter(Intent.ACTION_TIME_TICK);
         time.addAction(Intent.ACTION_TIME_CHANGED);
         time.addAction(Intent.ACTION_TIMEZONE_CHANGED);
@@ -930,7 +940,7 @@ public final class HomeActivity extends Activity {
             settingsList.addView(row(-1, "Android settings", "Network, display, apps and more", "\u203A",
                     "android", v -> startSafely(new Intent(Settings.ACTION_SETTINGS))));
             settingsList.addView(row(-1, "Hush Home button", "For TVs without a home-screen setting. Turned on or off in Accessibility",
-                    redirectEnabled() ? "On" : "Off", "redirect", v -> startSafely(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))));
+                    redirectEnabled() ? "On" : "Off", "redirect", v -> openAccessibility()));
             if (isFireTv()) {
                 settingsList.addView(row(-1, "Amazon's home screen", "Opens it and leaves it alone for 5 minutes",
                         "\u203A", "amazon", v -> {
@@ -990,7 +1000,7 @@ public final class HomeActivity extends Activity {
                         buildSettingsList("reset");
                     }));
         }
-        focusTagged(focusTag);
+        if (focusTag != null || !settingsPage.equals("Get started")) focusTagged(focusTag);
     }
 
     private void pickBootApp(String pkg) {
@@ -1150,6 +1160,10 @@ public final class HomeActivity extends Activity {
         });
     }
 
+    /** Set when a Get started step opened another screen; Back from there returns to the guide. */
+    private boolean guideReturn;
+    private String lastGuidePlace;
+
     private boolean setupDone() {
         return getSharedPreferences("home", MODE_PRIVATE).getBoolean("setup_done", false);
     }
@@ -1162,29 +1176,57 @@ public final class HomeActivity extends Activity {
         return redirectEnabled();
     }
 
+    /** Where this TV keeps Accessibility, in its own menu words. */
+    private String accessibilityPath() {
+        if (isFireTv()) return "Settings \u2192 Accessibility";
+        boolean googleTv;
+        try {
+            getPackageManager().getPackageInfo("com.google.android.apps.tv.launcherx", 0);
+            googleTv = true;
+        } catch (Exception e) {
+            googleTv = false;
+        }
+        return googleTv ? "Settings \u2192 System \u2192 Accessibility"
+                : "Settings \u2192 Device Preferences \u2192 Accessibility";
+    }
+
+    /** Opens Accessibility if the TV allows it; otherwise its Settings, with the path to follow. */
+    private void openAccessibility() {
+        Intent a11y = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+        android.content.pm.ResolveInfo r = getPackageManager().resolveActivity(a11y, 0);
+        boolean real = r != null && r.activityInfo != null && !r.activityInfo.packageName.contains("stubs");
+        notice("Turn on \u201CHush Home button\u201D" + (real ? "" : ": " + accessibilityPath()));
+        startSafely(real ? a11y : new Intent(Settings.ACTION_SETTINGS));
+    }
+
     /** First-run guide: each step opens the place where it is done. */
     private void buildSetupRows() {
         settingsHint.setText("Each step is optional. You can come back here from Settings.");
         boolean home = isHomeScreen();
-        settingsList.addView(row(-1, "1. Make Hush your home screen",
-                home ? "Done: the Home button opens Hush"
-                        : "Opens the TV's setting. If there isn't one, turn on \u201CHush Home button\u201D in Accessibility",
+        final boolean tried = getSharedPreferences("home", MODE_PRIVATE).getBoolean("home_setting_tried", false);
+        Intent pickHome = new Intent(Settings.ACTION_HOME_SETTINGS);
+        final boolean hasPicker = pickHome.resolveActivity(getPackageManager()) != null && !isFireTv();
+        final boolean useButton = !hasPicker || tried;
+        String sub = home ? "Done: the Home button opens Hush"
+                : useButton ? (tried ? "The TV kept its own home screen. Turn on \u201CHush Home button\u201D instead: " : "Turn on \u201CHush Home button\u201D: ")
+                        + accessibilityPath()
+                : "Opens the TV's home-screen setting. Choose Hush, then press Back";
+        settingsList.addView(row(-1, "1. Make Hush your home screen", sub,
                 home ? "\u2713" : "\u203A", "setup_home", v -> {
-                    Intent pick = new Intent(Settings.ACTION_HOME_SETTINGS);
-                    if (pick.resolveActivity(getPackageManager()) != null) startSafely(pick);
-                    else {
-                        notice(isFireTv() ? "Turn on \u201CHush Home button\u201D. If it isn't listed, this Fire TV hides it: see github.com/hush-tv/HushLauncher"
-                                : "Choose \u201CHush Home button\u201D and turn it on");
-                        startSafely(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
-                    }
+                    if (!useButton) {
+                        getSharedPreferences("home", MODE_PRIVATE).edit().putBoolean("home_setting_tried", true).apply();
+                        startSafely(new Intent(Settings.ACTION_HOME_SETTINGS));
+                    } else openAccessibility();
                 }));
         settingsList.addView(row(-1, "2. Choose your apps", "Hold OK on any app to add it to the row or take it off",
                 "\u203A", "setup_apps", v -> {
                     showOverlay(DRAWER);
+                    guideReturn = true;
                     notice("Hold OK on an app to add it to your row");
                 }));
         settingsList.addView(row(-1, "3. Pick a wallpaper", "Built-in scenes or your own pictures", "\u203A",
                 "setup_wall", v -> {
+                    guideReturn = true;
                     settingsPage = "Wallpaper";
                     wallpaperBefore = currentWallpaper();
                     settingsGallery = 1;
@@ -1204,6 +1246,7 @@ public final class HomeActivity extends Activity {
             getSharedPreferences("home", MODE_PRIVATE).edit().putBoolean("setup_done", true).apply();
             showOverlay(NONE);
         }));
+        if (settingsList.getChildCount() > 0) focusTagged(!home ? "setup_home" : "setup_apps");
     }
 
     /** Tracker blocking (Private DNS) and a shortcut to the TV's own ad settings. */
@@ -1241,7 +1284,16 @@ public final class HomeActivity extends Activity {
                             : new Intent(Settings.ACTION_PRIVACY_SETTINGS));
                 }));
         settingsList.addView(row(-1, "Usage and diagnostics", "Android's privacy page: stop sending usage data to Google",
-                "\u203A", "privacy", v -> startSafely(new android.content.Intent(Settings.ACTION_PRIVACY_SETTINGS))));
+                "\u203A", "privacy", v -> {
+                    Intent priv = new Intent(Settings.ACTION_PRIVACY_SETTINGS);
+                    android.content.pm.ResolveInfo r = getPackageManager().resolveActivity(priv, 0);
+                    if (r != null && r.activityInfo != null && !r.activityInfo.packageName.contains("stubs")) startSafely(priv);
+                    else {
+                        notice("Open " + (accessibilityPath().contains("System") ? "Settings \u2192 Privacy" : "Settings \u2192 Device Preferences")
+                                + " \u2192 Usage & diagnostics and turn it off");
+                        startSafely(new Intent(Settings.ACTION_SETTINGS));
+                    }
+                }));
     }
 
     /** Applies a changed setting to the home screen straight away. */
@@ -1856,6 +1908,12 @@ public final class HomeActivity extends Activity {
 
     /** Shows or hides the greeting and the weather, and fills the weather in from the last reading. */
     private void updateCorner() {
+        if (overlay == SETTINGS && "Get started".equals(settingsPage) && settingsOption == null && settingsGallery == 0
+                && settingsList.findViewWithTag("setup_weather") != null && weather.place() != null
+                && !String.valueOf(weather.place()).equals(lastGuidePlace)) {
+            lastGuidePlace = weather.place();
+            settingsList.post(() -> buildSettingsList("setup_weather"));
+        }
         // Stays up while settings are open, so switching these on and off shows straight away.
         boolean drawerUp = overlay == DRAWER || (overlay == SETTINGS && settingsFrom == DRAWER);
         cornerBox.setVisibility(drawerUp ? View.GONE : View.VISIBLE);
@@ -2056,6 +2114,14 @@ public final class HomeActivity extends Activity {
 
     private void showOverlay(int which) {
         if (which == overlay) return;
+        if (which == NONE && guideReturn && overlay == DRAWER) {
+            guideReturn = false;
+            showOverlay(NONE);
+            showOverlay(SETTINGS);
+            settingsPage = "Get started";
+            buildSettingsList("setup_apps");
+            return;
+        }
         if (overlay == SETTINGS && settingsGallery != 0) closeGallery(); // drop any unsaved preview
         if (which == SETTINGS) {
             settingsFrom = overlay;
@@ -2930,6 +2996,10 @@ public final class HomeActivity extends Activity {
         int was = settingsGallery;
         settingsGallery = 0;
         if (was == 1 || was == 2) applyWallpaper();
+        if (guideReturn && was == 1) {
+            guideReturn = false;
+            settingsPage = "Get started";
+        }
         if (was == 3) applyPackAsync(apps.iconPack());
     }
 

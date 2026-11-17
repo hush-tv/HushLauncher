@@ -8,7 +8,7 @@ BT="$ANDROID_HOME/build-tools/36.0.0"; JAR="$ANDROID_HOME/platforms/android-36/a
 rm -rf build launcher.apk launcher.apk.idsig && mkdir -p build/classes build/gen build/dex
 "$BT/aapt2" compile --dir res -o build/res.zip
 "$BT/aapt2" link -o build/base.apk -I "$JAR" --manifest AndroidManifest.xml build/res.zip -A assets \
-  --java build/gen --min-sdk-version 26 --target-sdk-version 34 --version-code 29 --version-name 1.28
+  --java build/gen --min-sdk-version 26 --target-sdk-version 34 --version-code 30 --version-name 1.29
 javac -nowarn -Xlint:-deprecation -Xlint:-options --release 8 -cp "$JAR" -d build/classes $(find src build/gen -name '*.java')
 "$BT/d8" --lib "$JAR" --min-api 26 --output build/dex $(find build/classes -name '*.class')
 (cd build/dex && zip -q ../base.apk classes.dex)

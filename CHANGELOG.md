@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.29
+
+Fixes from testing setup as a new user on an Nvidia Shield.
+
+- **Home screen step:** detects correctly which app the Home button opens (it could wrongly
+  show as done). On TVs that accept Hush in their home-screen setting but keep opening their
+  own home screen (Nvidia Shield, Android TV 11), the guide notices and switches to the
+  Hush Home button, with the exact menu path for that TV.
+- The guide reopens when Hush is opened again and isn't the home screen yet, and starts on the
+  first unfinished step.
+- Back from "Choose your apps" or "Pick a wallpaper" returns to the guide.
+- The weather step ticks itself once a town is set.
+- "Usage and diagnostics" falls back to the TV's Settings with the menu path on TVs that don't
+  link to it directly.
+
 ## 1.28
 
 - **In-app updates.** Settings → System → Updates checks GitHub and installs new versions with

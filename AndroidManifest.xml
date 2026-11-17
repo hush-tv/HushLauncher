@@ -22,8 +22,11 @@
         <intent><action android:name="org.adw.launcher.icons.ACTION_PICK_ICON" /></intent>
         <!-- To find the VPN app that the corner VPN button should open. -->
         <intent><action android:name="android.net.VpnService" /></intent>
+        <!-- To tell which app the Home button opens (Get started, step 1) and keep launchers off a new row. -->
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.HOME" /></intent>
         <!-- To tell whether this is a Fire TV, where the Home redirect applies. -->
         <package android:name="com.amazon.tv.launcher" />
+        <package android:name="com.google.android.apps.tv.launcherx" />
     </queries>
     <application android:label="Hush" android:icon="@drawable/icon" android:banner="@drawable/banner"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar" android:allowBackup="true">

@@ -145,7 +145,9 @@ Play Store or the Amazon Appstore and install it.
 - **Fire TV:** Settings → My Fire TV → About → press your device's name seven times, press Back,
   then Developer options → Install unknown apps → turn on **Downloader**.
 
-**3. Install Hush.** Open Downloader, enter the code **2573570** and choose **Install**.
+**3. Install Hush.** Open Downloader, enter the code **2573570** and choose **Install**. If the
+code page stays on "Redirecting", type the full link instead:
+`github.com/hush-tv/HushLauncher/releases/latest/download/launcher.apk`
 
 **4. Open Hush.** Choose **Open** at the end of the install. Later you can find it under
 Apps → See all apps (Google TV) or by holding Home → Apps (Fire TV); it is near the end of the list.
@@ -158,6 +160,10 @@ Apps → See all apps (Google TV) or by holding Home → Apps (Fire TV); it is n
 - **Choosing your apps**, **picking a wallpaper**, **showing the weather** and **privacy**.
 
 The row starts with the apps already on your TV.
+
+**Nvidia Shield and some Android TV 11 devices** accept Hush in their home-screen setting but keep
+opening their own home screen when Home is pressed. If that happens, the guide switches to the
+**Hush Home button**: Settings → Device Preferences → Accessibility → Hush Home button → On.
 
 ### With Claude or another AI assistant
 
