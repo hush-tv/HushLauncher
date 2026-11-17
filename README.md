@@ -1,5 +1,7 @@
 # Hush Launcher
 
+<img src="preview/logo.png" width="96" alt="Hush logo">
+
 [![Latest release](https://img.shields.io/github/v/release/hush-tv/HushLauncher)](https://github.com/hush-tv/HushLauncher/releases/latest)
 [![Licence: GPL v3](https://img.shields.io/badge/licence-GPLv3-blue)](LICENSE)
 ![Android TV 8+](https://img.shields.io/badge/Android%20TV-8%2B-3ddc84)
@@ -65,9 +67,10 @@ It is free, open source, about 3 MB, and has no account, analytics or advertisin
 
 ## Privacy
 
-**What Hush collects:** nothing. Hush has no account, analytics, crash reporting or ads. Its
-only network request is the optional weather (see [Weather](#weather)), which is off by
-default.
+**What Hush collects:** nothing. Hush has no account, analytics, crash reporting or ads. It makes
+only two kinds of network request: the optional weather (see [Weather](#weather)), off by
+default, and the update check (see [Updates](#updates)), which asks GitHub once a day whether a
+newer version exists and can be switched off.
 
 **Tracker blocking (Android 9 or newer):** Settings → Privacy can switch the TV to an encrypted DNS service that
 refuses to look up known advertising and tracking domains. It applies to every app on the TV
@@ -236,8 +239,8 @@ both for you.
 **Does the TV switch back to its own home screen after a system update?** Usually not. If it
 does, press Home and choose Hush again, or run the `set-home-activity` command.
 
-**How do I update?** Download the newest `launcher.apk` and install it over the old one. Your
-settings are kept. [Obtainium](https://github.com/ImranR98/Obtainium) can check this page for
+**How do I update?** Settings → System → Updates. Or download the newest `launcher.apk` and
+install it over the old one. Your settings are kept either way. [Obtainium](https://github.com/ImranR98/Obtainium) can check this page for
 updates automatically.
 
 **Will YouTube ads be blocked?** No. YouTube serves ads from the same addresses as videos, so no
@@ -252,6 +255,14 @@ Weather is provided by [Open-Meteo](https://open-meteo.com) and is off by defaul
 a town (Settings → Clock → Weather town), its name is sent once to find its location. After
 that, Hush sends only that location, rounded to about a kilometre, at most once every 30
 minutes while the home screen is visible. Nothing is sent while weather is switched off.
+
+## Updates
+
+Hush checks GitHub once a day for a newer version. When there is one, a short notice appears
+and Settings → System → **Updates** shows it; press OK to download and install it. Android asks
+once for permission to let Hush install updates, then shows its own confirmation. Your settings
+are kept. Android only accepts an update signed with the same key, so a tampered file cannot be
+installed. To turn the check off: Settings → System → Check for updates → Off.
 
 ## Backup and restore
 

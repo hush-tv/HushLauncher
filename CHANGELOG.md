@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.28
+
+- **In-app updates.** Settings → System → Updates checks GitHub and installs new versions with
+  Android's own installer. A daily check (can be switched off) shows a notice when one is ready.
+- **New logo:** a quiet TV screen with one row of apps and a privacy shield.
+- The installer's **Open** button now works straight after installing.
+
 ## 1.27
 
 Easier setup.

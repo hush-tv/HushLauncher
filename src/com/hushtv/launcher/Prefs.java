@@ -61,6 +61,7 @@ final class Prefs {
             new Setting("Screensaver", "saver_dim", "Brightness", 1, "Bright", "Dimmed", "Dark"),
             new Setting("All apps", "down_opens", "Down opens all apps", 0, "Off", "On"),
             new Setting("All apps", "columns", "Columns", 1, "5", "6", "7"),
+            new Setting("System", "auto_update", "Check for updates", 1, "Off", "Once a day"),
     };
 
     private static final int[] ACCENTS = {0xFFFFFFFF, 0xFF76B900, 0xFF4C8DFF, 0xFFFFB020, 0xFFFF4D4D, 0xFFA070FF};
@@ -131,6 +132,8 @@ final class Prefs {
     int shine() { return new int[]{0, 0x16, 0x30, 0x52}[get("shine")]; }
     boolean wallpaperAuto() { return get("wp_auto") == 1; }
     boolean stars() { return get("stars") == 1; }
+    boolean autoUpdate() { return get("auto_update") == 1; }
+
     float skyStrength() { return new float[]{0f, 0.55f, 1f}[get("sky")]; }
     boolean nightDim() { return get("night_dim") == 1; }
     int animMillis() { return new int[]{0, 170, 280}[get("anim")]; }

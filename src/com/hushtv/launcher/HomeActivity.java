@@ -283,6 +283,7 @@ public final class HomeActivity extends Activity {
     protected void onResume() {
         super.onResume();
         resumed = true;
+        getWindow().getDecorView().postDelayed(this::maybeCheckForUpdate, 5000);
         IntentFilter time = new IntentFilter(Intent.ACTION_TIME_TICK);
         time.addAction(Intent.ACTION_TIME_CHANGED);
         time.addAction(Intent.ACTION_TIMEZONE_CHANGED);
@@ -436,6 +437,15 @@ public final class HomeActivity extends Activity {
         }
         // For testing a held button from a computer, which adb cannot do: --es hold "R3000,L3000"
         // holds Right for three seconds, then Left, sending the same repeats a remote would.
+        final String page = intent.getStringExtra("open_settings");
+        if (page != null) {
+            intent.removeExtra("open_settings");
+            getWindow().getDecorView().postDelayed(() -> {
+                showOverlay(SETTINGS);
+                settingsPage = page.isEmpty() ? null : page;
+                buildSettingsList(null);
+            }, 600);
+        }
         final String hold = intent.getStringExtra("hold");
         if (hold != null) {
             intent.removeExtra("hold");
@@ -916,6 +926,7 @@ public final class HomeActivity extends Activity {
         if (settingsPage.equals("Privacy")) buildPrivacyRows();
         if (settingsPage.equals("Get started")) buildSetupRows();
         if (settingsPage.equals("System")) {
+            settingsList.addView(updateRow());
             settingsList.addView(row(-1, "Android settings", "Network, display, apps and more", "\u203A",
                     "android", v -> startSafely(new Intent(Settings.ACTION_SETTINGS))));
             settingsList.addView(row(-1, "Hush Home button", "For TVs without a home-screen setting. Turned on or off in Accessibility",
@@ -1104,6 +1115,39 @@ public final class HomeActivity extends Activity {
 
     private static TextView valueOf(View row) {
         return row.findViewById(android.R.id.text2);
+    }
+
+    /** Settings → System row: shows the version and what an update check found; OK checks or installs. */
+    private View updateRow() {
+        String now = Updater.installedVersion(this);
+        String sub, value;
+        if (Updater.state == 1) { sub = "Checking\u2026"; value = ""; }
+        else if (Updater.state == 2) { sub = "Downloading\u2026 " + Updater.progress + "%"; value = ""; }
+        else if (Updater.updateAvailable(this)) { sub = "Version " + Updater.latestVersion + " is ready. Press OK to install"; value = "\u2191"; }
+        else if (Updater.state == 3) { sub = Updater.error + ". Press OK to try again"; value = ""; }
+        else { sub = Updater.latestVersion == null ? "Press OK to check for a newer version" : "Up to date"; value = "v" + now; }
+        return row(-1, "Updates", sub, value, "update", v -> {
+            if (Updater.updateAvailable(this)) {
+                if (Updater.ensureAllowed(this)) Updater.install(this, this::refreshUpdateRow);
+                else notice("Allow Hush to install updates, then press OK again");
+            } else Updater.check(this, true, this::refreshUpdateRow);
+        });
+    }
+
+    private void refreshUpdateRow() {
+        if (overlay == SETTINGS && "System".equals(settingsPage) && settingsOption == null && settingsGallery == 0)
+            buildSettingsList("update");
+    }
+
+    /** Daily background check; a quiet notice when a new version appears. */
+    private void maybeCheckForUpdate() {
+        if (!prefs.autoUpdate()) return;
+        final boolean had = Updater.updateAvailable(this);
+        Updater.check(this, false, () -> {
+            if (!had && Updater.updateAvailable(this))
+                notice("Hush " + Updater.latestVersion + " is available: Settings \u2192 System \u2192 Updates");
+            refreshUpdateRow();
+        });
     }
 
     private boolean setupDone() {
