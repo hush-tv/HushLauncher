@@ -11,6 +11,4 @@ for d in backup wallpapers tiles; do
   [ -d "$FROM/$d" ] && "$ADB" -s "$DEV" push "$FROM/$d" "$DIR/" >/dev/null
 done
 "$ADB" -s "$DEV" shell am broadcast -n $PKG/.BackupReceiver -a $PKG.RESTORE >/dev/null
-"$ADB" -s "$DEV" shell am force-stop $PKG
-"$ADB" -s "$DEV" shell am start -n $PKG/.HomeActivity >/dev/null
 echo "restored"

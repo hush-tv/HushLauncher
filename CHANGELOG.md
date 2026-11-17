@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.33
+
+- Fire TV: "Set as screensaver" now works. Fire TV has no screensaver picker for other apps, so
+  Hush sets itself directly (needs the same one-time permission as tracker blocking).
+- Restoring a backup from a computer no longer switches off the Home button service on Fire TV.
+- New import from a computer, for copying one TV's Hush setup to another (Fire OS doesn't let a
+  computer write into Hush's folder directly).
+
 ## 1.32
 
 - All apps groups the apps that aren't on your home row under Watch, Listen, Play, and Apps and

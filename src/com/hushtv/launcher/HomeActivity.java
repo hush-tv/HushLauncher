@@ -2602,6 +2602,20 @@ public final class HomeActivity extends Activity {
      * request for it (the Shield doesn't), so the TV settings app's own screen is tried next.
      */
     private void openScreensaverSettings() {
+        // Fire TV has no screensaver chooser for other apps. With the one-time permission Hush
+        // already uses for tracker blocking, it can choose itself directly instead.
+        if (isFireTv() && checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            try {
+                Settings.Secure.putString(getContentResolver(), "screensaver_components",
+                        getPackageName() + "/" + ClockDream.class.getName());
+                Settings.Secure.putInt(getContentResolver(), "screensaver_enabled", 1);
+                notice("Hush is now the screensaver");
+                return;
+            } catch (RuntimeException ignored) {
+                // Fall through to the usual settings screens.
+            }
+        }
         Intent[] tries = {
                 new Intent(Settings.ACTION_DREAM_SETTINGS),
                 new Intent().setClassName("com.android.tv.settings",
