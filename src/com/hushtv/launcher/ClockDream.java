@@ -23,13 +23,20 @@ public final class ClockDream extends DreamService {
     public void onDreamingStarted() {
         super.onDreamingStarted();
         running = true;
-        view.start();
+        if (view != null) view.start();
     }
 
     @Override
     public void onDreamingStopped() {
         super.onDreamingStopped();
         running = false;
-        view.stop();
+        if (view != null) view.stop();
+    }
+
+    @Override
+    public void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        running = false;
+        if (view != null) view.stop(); // the dream can be torn down without onDreamingStopped
     }
 }

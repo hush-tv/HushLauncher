@@ -124,6 +124,30 @@ final class Apps {
     Apps(Context ctx) {
         this.ctx = ctx;
         this.prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        android.app.ActivityManager am = (android.app.ActivityManager) ctx.getSystemService(Context.ACTIVITY_SERVICE);
+        lowRam = am != null && (am.isLowRamDevice() || am.getMemoryClass() <= 192);
+    }
+
+    /** True on devices with little memory, where banners are kept smaller. */
+    private final boolean lowRam;
+
+    /** The launcher's own folder on shared storage, or its private one when that isn't mounted. */
+    static java.io.File filesDir(Context ctx) {
+        java.io.File d = ctx.getExternalFilesDir(null);
+        return d != null ? d : ctx.getFilesDir();
+    }
+
+    // Values of the wrong type (e.g. from an edited backup) read as the default rather than crashing.
+    private String str(String key, String def) {
+        try { return prefs.getString(key, def); } catch (ClassCastException e) { return def; }
+    }
+
+    private long num(String key, long def) {
+        try { return prefs.getLong(key, def); } catch (ClassCastException e) { return def; }
+    }
+
+    private int num(String key, int def) {
+        try { return prefs.getInt(key, def); } catch (ClassCastException e) { return def; }
     }
 
     /** Every launchable app, TV entry points preferred, sorted by name. */
@@ -144,7 +168,7 @@ final class Apps {
                 app.group = groupOf(ai.packageName, ai.applicationInfo);
                 try {
                     CharSequence label = ri.loadLabel(pm);
-                    if (label != null) app.label = label.toString();
+                    if (label != null && label.toString().trim().length() > 0) app.label = label.toString();
                     loadArt(pm, ai, app);
                     loadCustomInto(app);
                 } catch (Throwable t) {
@@ -176,7 +200,7 @@ final class Apps {
     }
 
     void setArtWidth(int px) {
-        artWidth = Math.max(256, Math.min(512, (px + 15) / 16 * 16));
+        artWidth = Math.max(256, Math.min(lowRam ? 320 : 512, (px + 15) / 16 * 16)); // less memory per banner on small devices
     }
 
     private void loadArt(PackageManager pm, ActivityInfo ai, App app) {
@@ -250,7 +274,7 @@ final class Apps {
 
     /** Package names on the home row, in order. */
     List<String> homePackages() {
-        String saved = prefs.getString(KEY_HOME, null);
+        String saved = str(KEY_HOME, null);
         if (saved == null) return new ArrayList<>(Arrays.asList(DEFAULT_HOME));
         List<String> out = new ArrayList<>();
         for (String s : saved.split(",")) if (!s.isEmpty()) out.add(s);
@@ -264,7 +288,7 @@ final class Apps {
     /** Home row apps in order, skipping anything not installed. */
     List<App> homeApps(List<App> all) {
         List<App> out = new ArrayList<>();
-        boolean chosen = prefs.getString(KEY_HOME, null) != null;
+        boolean chosen = str(KEY_HOME, null) != null;
         for (String pkg : homePackages()) {
             for (App a : all) {
                 if (a.pkg.equals(pkg)) {
@@ -334,7 +358,7 @@ final class Apps {
 
     /** The image file the user picked for this app's tile, or null. */
     String tileImage(String pkg) {
-        return prefs.getString("tileimg_" + pkg, null);
+        return str("tileimg_" + pkg, null);
     }
 
     void setTileImage(String pkg, String path) {
@@ -356,7 +380,7 @@ final class Apps {
         if (OWN.equals(path)) return null;
         if (path == null) {
             // No explicit choice: use a picture in the tiles folder named after the app's package.
-            java.io.File dir = new java.io.File(ctx.getExternalFilesDir(null), "tiles");
+            java.io.File dir = new java.io.File(filesDir(ctx), "tiles");
             for (String ext : new String[]{".png", ".jpg", ".webp"}) {
                 java.io.File f = new java.io.File(dir, pkg + ext);
                 if (f.isFile()) path = f.getAbsolutePath();
@@ -365,14 +389,18 @@ final class Apps {
         return path == null ? null : decodeSampled(path);
     }
 
-    /** Decodes a tile picture at no more than about 512 pixels wide, however large the file is. */
+    /** Decodes a tile picture at no more than about 512 pixels across, however large the file is. */
     static Bitmap decodeSampled(String path) {
         try {
             android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
             o.inJustDecodeBounds = true;
             android.graphics.BitmapFactory.decodeFile(path, o);
             int sample = 1;
-            while (o.outWidth / (sample * 2) >= 512) sample *= 2;
+            // By the longer side, so a very tall picture is shrunk too.
+            int longest = Math.max(o.outWidth, o.outHeight);
+            while (longest / (sample * 2) >= 512) sample *= 2;
+            // And never more than about four tiles' worth of pixels (512 x 288 each).
+            while ((long) (o.outWidth / sample) * (o.outHeight / sample) > 4L * 512 * 288) sample *= 2;
             o = new android.graphics.BitmapFactory.Options();
             o.inSampleSize = sample;
             return android.graphics.BitmapFactory.decodeFile(path, o);
@@ -382,7 +410,7 @@ final class Apps {
     }
 
     long lastRotation() {
-        return prefs.getLong("wallpaper_rotated", 0);
+        return num("wallpaper_rotated", 0L);
     }
 
     void setLastRotation(long when) {
@@ -394,7 +422,7 @@ final class Apps {
 
     /** Each sub-folder here is an icon pack: pictures named after the app's package. */
     java.io.File packsDir() {
-        java.io.File d = new java.io.File(ctx.getExternalFilesDir(null), "packs");
+        java.io.File d = new java.io.File(filesDir(ctx), "packs");
         if (!d.exists()) d.mkdirs();
         return d;
     }
@@ -474,7 +502,7 @@ final class Apps {
 
     /** Package name of the chosen icon pack, a DIR_PACK folder, or null for none. */
     String iconPack() {
-        return prefs.getString("icon_pack", null);
+        return str("icon_pack", null);
     }
 
     void setIconPack(String pkg) {
@@ -483,7 +511,7 @@ final class Apps {
     }
 
     String wallpaper() {
-        return prefs.getString("wallpaper", "asset:dusk_ridge.jpg");
+        return str("wallpaper", "asset:dusk_ridge.jpg");
     }
 
     void setWallpaper(String value) {
@@ -492,7 +520,7 @@ final class Apps {
 
     /** Package of the app to open when the TV starts, or null for none. */
     String bootApp() {
-        return prefs.getString("boot_app", null);
+        return str("boot_app", null);
     }
 
     void setBootApp(String pkg) {
@@ -505,14 +533,14 @@ final class Apps {
      * count of how many times the device has booted, or -1 if it isn't available.
      */
     boolean firstRunThisBoot(int bootCount) {
-        if (bootCount < 0 || prefs.getInt(Backup.BOOT_SEEN, -1) == bootCount) return false;
+        if (bootCount < 0 || num(Backup.BOOT_SEEN, -1) == bootCount) return false;
         prefs.edit().putInt(Backup.BOOT_SEEN, bootCount).apply();
         return true;
     }
 
     /** Allows the launcher to restart itself to shed memory at most twice per start of the TV. */
     boolean maySlimDown(int bootCount) {
-        int count = prefs.getInt("slim_boot", -2) == bootCount ? prefs.getInt("slim_count", 0) : 0;
+        int count = num("slim_boot", -2) == bootCount ? num("slim_count", 0) : 0;
         if (count >= 2) return false;
         prefs.edit().putInt("slim_boot", bootCount).putInt("slim_count", count + 1).commit();
         return true;

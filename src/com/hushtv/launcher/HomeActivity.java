@@ -172,10 +172,21 @@ public final class HomeActivity extends Activity {
         }
     };
 
+    /** Whether networkCallback is currently registered, so it is never unregistered twice. */
+    private boolean networkRegistered;
+
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override
         public void onAvailable(Network network) {
-            runOnUiThread(HomeActivity.this::updateStatusIcons);
+            runOnUiThread(() -> {
+                if (isDestroyed()) return;
+                updateStatusIcons();
+                // Back online with nothing to show: try now rather than after the retry wait.
+                if (!weather.hasReading()) {
+                    weather.clearRetryWait();
+                    refreshWeather();
+                }
+            });
         }
 
         @Override
@@ -256,6 +267,7 @@ public final class HomeActivity extends Activity {
         if (!setupDone() && !getSharedPreferences("home", MODE_PRIVATE).getBoolean("setup_shown", false)) {
             getSharedPreferences("home", MODE_PRIVATE).edit().putBoolean("setup_shown", true).apply();
             getWindow().getDecorView().postDelayed(() -> {
+                if (isDestroyed()) return;
                 showOverlay(SETTINGS);
                 settingsPage = "Get started";
                 buildSettingsList(null);
@@ -276,8 +288,52 @@ public final class HomeActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         unregisterReceiver(packages);
+        // Nothing queued may run against a finished screen.
+        View decor = getWindow().getDecorView();
+        decor.removeCallbacks(updateCheck);
+        row.removeCallbacks(quietReload);
+        row.removeCallbacks(goAmbient);
+        row.removeCallbacks(slimDown);
+        if (noticeView != null) noticeView.removeCallbacks(hideNotice);
+        if (settingsList != null) {
+            settingsList.removeCallbacks(previewRunnable);
+            settingsList.removeCallbacks(previewPackRunnable);
+        }
         background.shutdown();
         thumbs.shutdown();
+    }
+
+    /** Runs work on the background thread, unless the screen is already gone. */
+    private void runInBackground(Runnable work) {
+        submit(background, work);
+    }
+
+    /** Runs work on the thumbnail thread, unless the screen is already gone. */
+    private void runThumb(Runnable work) {
+        submit(thumbs, work);
+    }
+
+    private void submit(ExecutorService on, Runnable work) {
+        if (isDestroyed() || on.isShutdown()) return;
+        try {
+            on.execute(work);
+        } catch (java.util.concurrent.RejectedExecutionException ignored) {
+            // shut down between the check and the call
+        }
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration config) {
+        super.onConfigurationChanged(config);
+        int w = getResources().getDisplayMetrics().widthPixels;
+        int h = getResources().getDisplayMetrics().heightPixels;
+        if (w == screenW && h == screenH) return;
+        // A new display mode or size: everything is laid out in fractions of the screen.
+        screenW = w;
+        screenH = h;
+        applyLayoutSettings();
+        applyWallpaper();
+        loadApps(false);
     }
 
     @Override
@@ -293,7 +349,7 @@ public final class HomeActivity extends Activity {
         if (!setupDone() && overlay == NONE && getSharedPreferences("home", MODE_PRIVATE).getBoolean("setup_shown", false)
                 && !isHomeScreen()) {
             getWindow().getDecorView().postDelayed(() -> {
-                if (overlay != NONE) return;
+                if (isDestroyed() || overlay != NONE) return;
                 showOverlay(SETTINGS);
                 settingsPage = "Get started";
                 buildSettingsList(null);
@@ -308,8 +364,15 @@ public final class HomeActivity extends Activity {
         if (appsDirty) loadApps();
         else playEntrance();
         connectivity = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        connectivity.registerNetworkCallback(new NetworkRequest.Builder()
-                .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(), networkCallback);
+        if (!networkRegistered) {
+            try {
+                connectivity.registerNetworkCallback(new NetworkRequest.Builder()
+                        .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(), networkCallback);
+                networkRegistered = true;
+            } catch (RuntimeException e) {
+                // e.g. too many callbacks for this app; the icons just update less often
+            }
+        }
         updateStatusIcons();
         leaveAmbient();
         restartAmbientTimer();
@@ -344,7 +407,13 @@ public final class HomeActivity extends Activity {
         getWindow().getDecorView().removeCallbacks(updateCheck);
         Updater.failed = null;
         unregisterReceiver(tick);
-        connectivity.unregisterNetworkCallback(networkCallback);
+        if (networkRegistered) {
+            networkRegistered = false;
+            try {
+                connectivity.unregisterNetworkCallback(networkCallback);
+            } catch (RuntimeException ignored) {
+            }
+        }
     }
 
     // ---------------------------------------------------------------- memory
@@ -472,6 +541,7 @@ public final class HomeActivity extends Activity {
         if (page != null) {
             intent.removeExtra("open_settings");
             getWindow().getDecorView().postDelayed(() -> {
+                if (isDestroyed()) return;
                 showOverlay(SETTINGS);
                 settingsPage = page.isEmpty() ? null : page;
                 buildSettingsList(null);
@@ -747,7 +817,7 @@ public final class HomeActivity extends Activity {
             return;
         }
         final List<Apps.App> from = all;
-        background.execute(() -> {
+        runInBackground(() -> {
             if (generation != rowGeneration) return; // a newer change is already queued
             final List<TileView> tiles = makeRowTiles(from);
             runOnUiThread(() -> {
@@ -1166,6 +1236,7 @@ public final class HomeActivity extends Activity {
     }
 
     private void refreshUpdateRow() {
+        if (isDestroyed()) return; // the update check can answer after the screen has gone
         if (overlay == SETTINGS && "System".equals(settingsPage) && settingsOption == null && settingsGallery == 0)
             buildSettingsList("update");
     }
@@ -1445,7 +1516,7 @@ public final class HomeActivity extends Activity {
         final boolean demo = isDemo();
         apps.setArtWidth(neededArtWidth());
         final int generation = ++loadGeneration;
-        background.execute(() -> {
+        runInBackground(() -> {
             // Skip this load if a newer one was queued behind it (e.g. stepping quickly through icon packs).
             if (generation != loadGeneration) return;
             final List<Apps.App> loaded = demo ? apps.demoApps() : apps.loadAll();
@@ -1613,7 +1684,7 @@ public final class HomeActivity extends Activity {
      * own small heap fills up, which here is almost never, so it is asked to once things settle.
      */
     private void tidyMemorySoon() {
-        row.postDelayed(() -> background.execute(() -> {
+        row.postDelayed(() -> runInBackground(() -> {
             System.gc();
             System.runFinalization();
             System.gc();
@@ -1639,6 +1710,7 @@ public final class HomeActivity extends Activity {
         settings.setAlpha(0.01f);
         settings.setVisibility(View.VISIBLE);
         row.postDelayed(() -> {
+            if (isDestroyed()) return;
             warming = false;
             boolean drawerInUse = overlay == DRAWER || (overlay == SETTINGS && settingsFrom == DRAWER);
             if (!drawerInUse) {
@@ -2714,7 +2786,7 @@ public final class HomeActivity extends Activity {
     }
 
     private File dir(String name) {
-        File d = new File(getExternalFilesDir(null), name);
+        File d = new File(Apps.filesDir(this), name);
         if (!d.exists()) d.mkdirs();
         return d;
     }
@@ -2823,7 +2895,7 @@ public final class HomeActivity extends Activity {
             thumb.setBitmap(kept); // already made on an earlier visit: no work, no waiting
             return;
         }
-        thumbs.execute(() -> {
+        runThumb(() -> {
             // Below normal priority, so making thumbnails never competes with drawing frames.
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
             Bitmap bmp = null;
@@ -2933,7 +3005,7 @@ public final class HomeActivity extends Activity {
     private void applyPackAsync(final String pack) {
         final int generation = ++packGeneration;
         final List<Apps.App> target = all;
-        background.execute(() -> {
+        runInBackground(() -> {
             if (generation != packGeneration) return;
             apps.applyPack(target, pack);
             runOnUiThread(() -> {
@@ -3138,9 +3210,14 @@ public final class HomeActivity extends Activity {
 
     /** Copies a picture found on the device into the launcher's wallpapers folder and sets it. */
     private void addPicture(final String value, final String name) {
-        background.execute(() -> {
+        runInBackground(() -> {
             String safe = name.replaceAll("[^A-Za-z0-9 _-]", "").trim();
-            final File dest = new File(wallpaperDir(), (safe.isEmpty() ? "Picture" : safe) + ".jpg");
+            if (safe.isEmpty()) safe = "Picture";
+            // A number on the end, so a picture with the same name doesn't replace an earlier one.
+            File pick = new File(wallpaperDir(), safe + ".jpg");
+            for (int i = 2; pick.exists(); i++) pick = new File(wallpaperDir(), safe + " " + i + ".jpg");
+            final File dest = pick;
+            synchronized (THUMBS) { THUMBS.remove("file:" + dest.getAbsolutePath()); }
             boolean ok = false;
             try (InputStream in = open(value); java.io.OutputStream out = new java.io.FileOutputStream(dest)) {
                 byte[] buf = new byte[65536];
@@ -3204,7 +3281,7 @@ public final class HomeActivity extends Activity {
         final int blur = prefs.wallpaperBlur();
         final boolean matchAccent = prefs.accentFromWallpaper();
         final int generation = ++wallpaperGeneration;
-        background.execute(() -> {
+        runInBackground(() -> {
             if (generation != wallpaperGeneration) return; // a newer request is already queued
             Bitmap out = null;
             try {
@@ -3396,6 +3473,10 @@ public final class HomeActivity extends Activity {
         }
         int sample = 1;
         while (bounds.outWidth / (sample * 2) >= targetW && bounds.outHeight / (sample * 2) >= targetH) {
+            sample *= 2;
+        }
+        // A very long or tall picture can still be huge at that size; cap it at twice the target's pixels.
+        while ((long) (bounds.outWidth / sample) * (bounds.outHeight / sample) > 2L * targetW * targetH) {
             sample *= 2;
         }
         BitmapFactory.Options opts = new BitmapFactory.Options();

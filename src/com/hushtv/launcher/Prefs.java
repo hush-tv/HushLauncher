@@ -74,7 +74,12 @@ final class Prefs {
     }
 
     int get(Setting s) {
-        int v = sp.getInt(s.key, s.def);
+        int v;
+        try {
+            v = sp.getInt(s.key, s.def);
+        } catch (ClassCastException e) {
+            return s.def; // a value of the wrong type, e.g. from a hand-edited backup
+        }
         return v < 0 || v >= s.options.length ? s.def : v;
     }
 

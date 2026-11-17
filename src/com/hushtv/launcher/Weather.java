@@ -37,25 +37,43 @@ final class Weather {
 
     /** The chosen town's name, or null if none has been set. */
     String place() {
-        return sp.getString("weather_place", null);
+        try {
+            return sp.getString("weather_place", null);
+        } catch (ClassCastException e) {
+            return null;
+        }
+    }
+
+    // Wrong-typed values (e.g. from an old or edited backup) read as the default instead of crashing.
+    private long longOf(String key) {
+        try { return sp.getLong(key, 0); } catch (ClassCastException e) { return 0; }
+    }
+
+    private float floatOf(String key) {
+        try { return sp.getFloat(key, 0f); } catch (ClassCastException e) { return 0f; }
     }
 
     boolean hasReading() {
-        return place() != null && System.currentTimeMillis() - sp.getLong("weather_at", 0) < STALE_MILLIS;
+        return place() != null && System.currentTimeMillis() - longOf("weather_at") < STALE_MILLIS;
     }
 
     boolean due() {
         long now = System.currentTimeMillis();
         // After a failed try, wait a while rather than asking again every time the home screen shows.
-        return place() != null && now - sp.getLong("weather_at", 0) > FRESH_MILLIS
-                && now - sp.getLong("weather_tried_at", 0) > RETRY_MILLIS;
+        return place() != null && now - longOf("weather_at") > FRESH_MILLIS
+                && now - longOf("weather_tried_at") > RETRY_MILLIS;
     }
 
-    float tempC() { return sp.getFloat("weather_temp", 0f); }
-    float highC() { return sp.getFloat("weather_hi", 0f); }
-    float lowC() { return sp.getFloat("weather_lo", 0f); }
-    boolean day() { return sp.getBoolean("weather_day", true); }
-    private int code() { return sp.getInt("weather_code", 0); }
+    float tempC() { return floatOf("weather_temp"); }
+    float highC() { return floatOf("weather_hi"); }
+    float lowC() { return floatOf("weather_lo"); }
+    boolean day() {
+        try { return sp.getBoolean("weather_day", true); } catch (ClassCastException e) { return true; }
+    }
+
+    private int code() {
+        try { return sp.getInt("weather_code", 0); } catch (ClassCastException e) { return 0; }
+    }
 
     /** Which picture suits the current conditions. */
     int kind() {
@@ -128,7 +146,12 @@ final class Weather {
         }
     }
 
-    void clearPlace() {
+    /** Forgets the last failed try, so the next refresh goes ahead at once. */
+    void clearRetryWait() {
+        sp.edit().remove("weather_tried_at").apply();
+    }
+
+        void clearPlace() {
         sp.edit().remove("weather_place").remove("weather_at").remove("weather_tried_at").apply();
     }
 
@@ -140,7 +163,7 @@ final class Weather {
             String url = String.format(Locale.US, "https://api.open-meteo.com/v1/forecast?latitude=%.2f"
                             + "&longitude=%.2f&current=temperature_2m,weather_code,is_day"
                             + "&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1",
-                    sp.getFloat("weather_lat", 0f), sp.getFloat("weather_lon", 0f));
+                    floatOf("weather_lat"), floatOf("weather_lon"));
             JSONObject root = new JSONObject(get(url));
             JSONObject now = root.getJSONObject("current");
             JSONObject daily = root.getJSONObject("daily");
@@ -166,7 +189,10 @@ final class Weather {
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 byte[] buf = new byte[4096];
                 int n;
+                // The read timeout is per read, so a slow trickle could otherwise go on for ever.
+                long deadline = System.currentTimeMillis() + 20_000;
                 while ((n = in.read(buf)) > 0) {
+                    if (System.currentTimeMillis() > deadline) throw new IOException("too slow");
                     out.write(buf, 0, n);
                     if (out.size() > 200_000) throw new IOException("reply too large");
                 }

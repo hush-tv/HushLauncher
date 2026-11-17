@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.34
+
+Stability release, from stress tests on Android TV 12, Google TV 14 (720p, 1 GB), Nvidia Shield
+and Fire TV.
+
+- A damaged or hand-edited backup can no longer stop Hush from starting; values of the wrong type
+  are skipped and fall back to defaults.
+- Backups move between TVs: picture and wallpaper paths are adjusted to the new device.
+- A failed import keeps the previous backup.
+- Changing the TV's resolution, dark mode or language while Hush is open no longer leaves the
+  layout or wallpaper the wrong size, or crashes it.
+- Weather comes back as soon as the network does, and a slow weather server can't hold it up.
+- Very large wallpapers and tile pictures are scaled down safely instead of failing; on low-memory
+  TVs app pictures use less memory.
+- Adding pictures with the same or a non-Latin name no longer overwrites earlier ones.
+- An icon pack with a broken entry still works; apps with no name show their package name.
+- The screensaver and background tasks can't crash Hush when they finish late.
+
 ## 1.33
 
 - Fire TV: "Set as screensaver" now works. Fire TV has no screensaver picker for other apps, so

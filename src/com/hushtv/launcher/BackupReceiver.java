@@ -38,7 +38,7 @@ public final class BackupReceiver extends BroadcastReceiver {
             if ("com.hushtv.launcher.IMPORT".equals(action)) {
                 String from = intent.getStringExtra("from");
                 if (from == null) throw new IOException("no folder");
-                File into = ctx.getExternalFilesDir(null);
+                File into = Apps.filesDir(ctx);
                 for (String dir : new String[]{"packs", "tiles", "wallpapers"}) {
                     copy(new File(from, dir), new File(into, dir));
                 }
@@ -48,8 +48,22 @@ public final class BackupReceiver extends BroadcastReceiver {
                 if (json != null) {
                     File f = Backup.file(ctx);
                     f.getParentFile().mkdirs();
-                    try (OutputStream out = new FileOutputStream(f)) {
-                        out.write(android.util.Base64.decode(json, android.util.Base64.DEFAULT));
+                    // Checked in a second file first, so a broken transfer keeps the old backup.
+                    File tmp = new File(f.getParentFile(), f.getName() + ".import");
+                    try {
+                        byte[] data = android.util.Base64.decode(json, android.util.Base64.DEFAULT);
+                        org.json.JSONObject root = new org.json.JSONObject(new String(data, "UTF-8"));
+                        if (root.optJSONObject("home") == null && root.optJSONObject("settings") == null) {
+                            throw new IOException("not a launcher backup");
+                        }
+                        try (OutputStream out = new FileOutputStream(tmp)) {
+                            out.write(data);
+                        }
+                        if (!tmp.renameTo(f)) throw new IOException("could not replace the old backup");
+                    } catch (org.json.JSONException | IllegalArgumentException e) {
+                        throw new IOException(e);
+                    } finally {
+                        tmp.delete();
                     }
                 }
             } else if (!"com.hushtv.launcher.RESTORE".equals(action)) {

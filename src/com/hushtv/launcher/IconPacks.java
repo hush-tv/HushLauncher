@@ -66,23 +66,38 @@ final class IconPacks {
             xml.setInput(stream, "UTF-8");
         }
         try {
-            for (int ev = xml.getEventType(); ev != XmlPullParser.END_DOCUMENT; ev = xml.next()) {
-                if (ev != XmlPullParser.START_TAG || !"item".equals(xml.getName())) continue;
-                String component = xml.getAttributeValue(null, "component");
-                String drawable = xml.getAttributeValue(null, "drawable");
-                if (component == null || drawable == null) continue;
-                // "ComponentInfo{package/activity}"
-                int open = component.indexOf('{'), slash = component.indexOf('/'), close = component.indexOf('}');
-                if (open < 0 || slash < open || close < slash) continue;
-                String pkg = component.substring(open + 1, slash);
-                String cls = component.substring(slash + 1, close);
-                if (cls.startsWith(".")) cls = pkg + cls;
-                byComponent.put(pkg + "/" + cls, drawable);
-                if (!byPackage.containsKey(pkg)) byPackage.put(pkg, drawable);
+            int ev = xml.getEventType();
+            while (ev != XmlPullParser.END_DOCUMENT) {
+                // One malformed entry skips that entry, not the whole pack.
+                try {
+                    if (ev == XmlPullParser.START_TAG && "item".equals(xml.getName())) addItem(xml);
+                } catch (RuntimeException e) {
+                    // skip it
+                }
+                try {
+                    ev = xml.next();
+                } catch (org.xmlpull.v1.XmlPullParserException | RuntimeException e) {
+                    break; // the rest of the file is unreadable; keep what was read so far
+                }
             }
         } finally {
             if (stream != null) stream.close();
+            if (xml instanceof android.content.res.XmlResourceParser) ((android.content.res.XmlResourceParser) xml).close();
         }
+    }
+
+    private void addItem(XmlPullParser xml) {
+        String component = xml.getAttributeValue(null, "component");
+        String drawable = xml.getAttributeValue(null, "drawable");
+        if (component == null || drawable == null) return;
+        // "ComponentInfo{package/activity}"
+        int open = component.indexOf('{'), slash = component.indexOf('/'), close = component.indexOf('}');
+        if (open < 0 || slash < open || close < slash) return;
+        String pkg = component.substring(open + 1, slash);
+        String cls = component.substring(slash + 1, close);
+        if (cls.startsWith(".")) cls = pkg + cls;
+        byComponent.put(pkg + "/" + cls, drawable);
+        if (!byPackage.containsKey(pkg)) byPackage.put(pkg, drawable);
     }
 
     int size() {

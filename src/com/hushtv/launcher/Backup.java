@@ -34,7 +34,7 @@ final class Backup {
     }
 
     static File file(Context ctx) {
-        return new File(ctx.getExternalFilesDir(null), "backup/launcher-backup.json");
+        return new File(Apps.filesDir(ctx), "backup/launcher-backup.json");
     }
 
     static void save(Context ctx) throws IOException {
@@ -74,13 +74,17 @@ final class Backup {
     static void restore(Context ctx) throws IOException {
         try {
             File f = file(ctx);
+            // A settings file is a few kilobytes; anything huge is not one and would only use up memory.
+            if (f.length() > 1024 * 1024) throw new IOException("backup too large");
             byte[] data = new byte[(int) f.length()];
             try (FileInputStream is = new FileInputStream(f)) {
                 int at = 0, n;
                 while (at < data.length && (n = is.read(data, at, data.length - at)) > 0) at += n;
             }
             JSONObject root = new JSONObject(new String(data, "UTF-8"));
-            if (root.optInt("version") != 1) throw new IOException("unknown backup version");
+            // Later versions may add keys; those this version doesn't know are simply skipped.
+            if (root.optInt("version") < 1) throw new IOException("unknown backup version");
+            String here = Apps.filesDir(ctx).getAbsolutePath();
             // Read everything first, so a damaged file throws before any setting is cleared.
             List<SharedPreferences.Editor> edits = new ArrayList<>();
             for (String store : STORES) {
@@ -94,13 +98,18 @@ final class Backup {
                 for (Iterator<String> it = in.keys(); it.hasNext(); ) {
                     String key = it.next();
                     if (key.equals(BOOT_SEEN) || NOT_RESTORED.contains(key)) continue;
-                    JSONObject item = in.getJSONObject(key);
-                    switch (item.getString("t")) {
+                    JSONObject item = in.optJSONObject(key);
+                    if (item == null) continue;
+                    String t = item.optString("t");
+                    // A value of a type the app doesn't read that key as would crash it at startup.
+                    String want = expectedType(sp, key);
+                    if (want != null && !want.equals(t)) continue;
+                    switch (t) {
                         case "i": ed.putInt(key, item.getInt("v")); break;
                         case "l": ed.putLong(key, item.getLong("v")); break;
                         case "b": ed.putBoolean(key, item.getBoolean("v")); break;
                         case "f": ed.putFloat(key, (float) item.getDouble("v")); break;
-                        case "s": ed.putString(key, item.getString("v")); break;
+                        case "s": ed.putString(key, portable(item.getString("v"), here)); break;
                         default: break;
                     }
                 }
@@ -110,6 +119,41 @@ final class Backup {
         } catch (JSONException | RuntimeException e) {
             throw new IOException(e);
         }
+    }
+
+    private static final List<String> STRINGS = Arrays.asList("home_packages", "wallpaper", "icon_pack",
+            "weather_place", "boot_app", "update_latest", "update_url");
+    private static final List<String> FLOATS = Arrays.asList("weather_temp", "weather_hi", "weather_lo",
+            "weather_lat", "weather_lon");
+    private static final List<String> LONGS = Arrays.asList("weather_at", "weather_tried_at", "update_checked",
+            "wallpaper_rotated");
+
+    /** The type code the app reads {@code key} as, or null if it can't tell (then anything goes). */
+    private static String expectedType(SharedPreferences sp, String key) {
+        for (Prefs.Setting s : Prefs.ALL) if (s.key.equals(key)) return "i";
+        if (STRINGS.contains(key) || key.startsWith("tileimg_")) return "s";
+        if (FLOATS.contains(key)) return "f";
+        if (LONGS.contains(key)) return "l";
+        if (key.equals("weather_code")) return "i";
+        if (key.equals("weather_day") || key.startsWith("setup_") || key.equals("home_setting_tried")) return "b";
+        Object v = sp.getAll().get(key);
+        return v instanceof Integer ? "i" : v instanceof Long ? "l" : v instanceof Boolean ? "b"
+                : v instanceof Float ? "f" : v instanceof String ? "s" : null;
+    }
+
+    private static final String OWN_FOLDER = "/Android/data/com.hushtv.launcher/files";
+
+    /**
+     * Points a picture path saved on another device or user (e.g. /storage/emulated/10/...) at
+     * this one's folder, so a backup carries over.
+     */
+    private static String portable(String v, String here) {
+        if (v == null) return null;
+        int at = v.indexOf(OWN_FOLDER + "/");
+        if (at < 0) return v;
+        String prefix = v.startsWith("file:") ? "file:" : "";
+        if (!prefix.isEmpty() && !v.startsWith("file:/")) return v;
+        return prefix + here + v.substring(at + OWN_FOLDER.length());
     }
 
     /** Puts the current value of {@code key} back after the editor's clear(). */

@@ -126,7 +126,7 @@ final class SaverView extends FrameLayout {
             String current = new Apps(ctx).wallpaper();
             if (!current.equals("none")) pictures.add(current);
         } else if (style == 2) {
-            File[] mine = new File(ctx.getExternalFilesDir(null), "wallpapers").listFiles();
+            File[] mine = new File(Apps.filesDir(ctx), "wallpapers").listFiles();
             if (mine != null) {
                 Arrays.sort(mine);
                 for (File f : mine) {
