@@ -385,6 +385,19 @@ public final class HomeActivity extends Activity {
         row.postDelayed(slimDown, 20_000);
     }
 
+    /** When Hush is out of sight and memory is short, lets go of what can be rebuilt later. */
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (level < TRIM_MEMORY_UI_HIDDEN) return;
+        boolean drawerInUse = overlay == DRAWER || (overlay == SETTINGS && settingsFrom == DRAWER);
+        if (!drawerInUse) {
+            drawerGrid.removeAllViews();
+            drawerDirty = true;
+        }
+        THUMBS.evictAll();
+    }
+
     /** Pressing Home while already here closes any panel and returns to the first tile. */
     @Override
     protected void onNewIntent(Intent intent) {
@@ -1206,17 +1219,21 @@ public final class HomeActivity extends Activity {
         Intent a11y = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
         android.content.pm.ResolveInfo r = getPackageManager().resolveActivity(a11y, 0);
         boolean real = r != null && r.activityInfo != null && !r.activityInfo.packageName.contains("stubs");
-        notice("Turn on \u201CHush Home button\u201D" + (real ? "" : ": " + accessibilityPath()));
+        notice("Android will warn that it can see your screen. Hush only notices when the TV's own home screen"
+                + " opens and reads nothing else. Choose OK. Turn on \u201CHush Home button\u201D"
+                + (real ? "" : ": " + accessibilityPath()));
         startSafely(real ? a11y : new Intent(Settings.ACTION_SETTINGS));
     }
 
     /** First-run guide: each step opens the place where it is done. */
     private void buildSetupRows() {
-        settingsHint.setText("Each step is optional. You can come back here from Settings.");
+        settingsHint.setText("Step 1 matters most; the rest are optional. To see this guide again: Settings \u2192 Get started.");
         boolean home = isHomeScreen();
         final boolean tried = getSharedPreferences("home", MODE_PRIVATE).getBoolean("home_setting_tried", false);
         Intent pickHome = new Intent(Settings.ACTION_HOME_SETTINGS);
-        final boolean hasPicker = pickHome.resolveActivity(getPackageManager()) != null && !isFireTv();
+        // Some TVs answer with a stub that does nothing, which is as good as no picker.
+        android.content.ComponentName picker = pickHome.resolveActivity(getPackageManager());
+        final boolean hasPicker = picker != null && !picker.getPackageName().contains("stubs") && !isFireTv();
         final boolean useButton = !hasPicker || tried;
         String sub = home ? "Done: the Home button opens Hush"
                 : useButton ? (tried ? "The TV kept its own home screen. Turn on \u201CHush Home button\u201D instead: " : "Turn on \u201CHush Home button\u201D: ")
@@ -1262,23 +1279,24 @@ public final class HomeActivity extends Activity {
 
     /** Tracker blocking (Private DNS) and a shortcut to the TV's own ad settings. */
     private void buildPrivacyRows() {
-        settingsHint.setText("Hush itself collects nothing. With blocking on, the TV's address lookups go to the service you pick.");
+        settingsHint.setText("For privacy: blocks tracking. It can't remove ads inside videos, like YouTube's."
+                + " Hush itself collects nothing; with blocking on, the TV's address lookups go to the service you pick.");
         if (!Privacy.supported()) {
             settingsList.addView(row(-1, "Tracker blocking", "Needs Android 9 or newer", "", "dns0", null));
         } else {
         final boolean allowed = Privacy.canChange(this);
         final int now = Privacy.current(this);
-        if (!allowed) settingsList.addView(row(-1, "Tracker blocking: one-time setup",
+        if (!allowed) settingsList.addView(row(-1, "Tracker blocking (needs a computer once)",
                 "Android only allows it after one command from a computer or AI assistant. Steps: github.com/hush-tv/HushLauncher#privacy",
                 "", "dns_setup", null));
-        if (!allowed) settingsList.addView(row(-1, "No computer?",
-                "Set your router's DNS to AdGuard (94.140.14.14 and 94.140.15.15). That blocks for every device at home",
+        if (!allowed) settingsList.addView(row(-1, "No computer? Use your router instead",
+                "In your router's settings, set DNS to 94.140.14.14 and 94.140.15.15 (AdGuard). This blocks trackers for every device at home.",
                 "", "dns_router", null));
         else for (int i = 0; i < Privacy.SERVICES.length; i++) {
             final int index = i;
             String[] svc = Privacy.SERVICES[i];
             String title = i == 0 ? "Don't block" : (i == 3 ? "Block malware with " : "Block trackers with ") + svc[0];
-            if (i == 1) title += " (recommended)";
+            if (svc[0].equals("AdGuard")) title += " (recommended)";
             String sub = svc[1];
             settingsList.addView(row(-1, title, sub, index == now ? "\u2713" : "", "dns" + i, v -> {
                 if (!Privacy.set(this, index, ok -> {
@@ -1581,7 +1599,8 @@ public final class HomeActivity extends Activity {
             if (drawerDirty && overlay == NONE && !menuOpen && moving == null && !all.isEmpty()
                     && !isDestroyed()) {
                 buildDrawerGrid();
-                warmUp();
+                // Drawing the panels early costs memory a low-memory TV would rather keep.
+                if (!((android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE)).isLowRamDevice()) warmUp();
                 tidyMemorySoon();
             }
             return false;
@@ -1854,6 +1873,8 @@ public final class HomeActivity extends Activity {
             names.add(home.isEmpty() ? "All apps" : "Everything else");
         }
         boolean first = true;
+        // Tiles by visual row, so Up and Down can go to the row above or below, even a short one.
+        List<List<TileView>> rows = new ArrayList<>();
         for (int group = 0; group < lists.size(); group++) {
             List<Apps.App> list = lists.get(group);
             if (list.isEmpty()) continue;
@@ -1877,6 +1898,7 @@ public final class HomeActivity extends Activity {
             heading.addView(count);
             heading.setContentDescription(names.get(group) + ", " + list.size() + (list.size() == 1 ? " app" : " apps"));
             if (android.os.Build.VERSION.SDK_INT >= 28) heading.setAccessibilityHeading(true);
+            heading.setFocusable(false);
             heading.setPadding(0, first ? 0 : (int) (screenH * 0.040f), 0, (int) (screenH * 0.022f));
             first = false;
             GridLayout.LayoutParams hlp = new GridLayout.LayoutParams(
@@ -1887,6 +1909,12 @@ public final class HomeActivity extends Activity {
                 final Apps.App app = list.get(i);
                 TileView tile = new TileView(this, app, prefs, tileW, 1, 1.25f, false);
                 tile.capZoom(1.07f); // neighbours are close in the grid, so the selected tile grows less
+                tile.setId(View.generateViewId());
+                if (i % columns == 0) rows.add(new ArrayList<>());
+                rows.get(rows.size() - 1).add(tile);
+                // Selecting a group's first row brings its heading into view too.
+                if (i < columns) tile.onFocused = () -> drawerScroll.post(() -> drawerScroll.smoothScrollTo(0,
+                        Math.max(0, drawerGrid.getTop() + heading.getTop() - (int) (screenH * 0.02f))));
                 tile.setOnClickListener(v -> launch(app));
                 tile.setOnLongClickListener(v -> {
                     showDrawerTileMenu(app);
@@ -1897,6 +1925,19 @@ public final class HomeActivity extends Activity {
                 lp.rightMargin = (i % columns == columns - 1) ? 0 : gap;
                 lp.bottomMargin = (int) (screenH * 0.030f);
                 drawerGrid.addView(tile, lp);
+            }
+        }
+        for (int r = 0; r < rows.size(); r++) {
+            List<TileView> line = rows.get(r);
+            for (int c = 0; c < line.size(); c++) {
+                if (r > 0) {
+                    List<TileView> above = rows.get(r - 1);
+                    line.get(c).setNextFocusUpId(above.get(Math.min(c, above.size() - 1)).getId());
+                }
+                if (r < rows.size() - 1) {
+                    List<TileView> below = rows.get(r + 1);
+                    line.get(c).setNextFocusDownId(below.get(Math.min(c, below.size() - 1)).getId());
+                }
             }
         }
         List<TileView> made = new ArrayList<>();
@@ -2224,6 +2265,7 @@ public final class HomeActivity extends Activity {
                 drawer.setAlpha(1f);
             }
             focusFirst(drawerGrid);
+            drawerScroll.post(() -> drawerScroll.scrollTo(0, 0)); // the top heading, not just its first tile
         } else if (which == SETTINGS) {
             warming = false;
             settings.setAlpha(1f);
@@ -3248,7 +3290,7 @@ public final class HomeActivity extends Activity {
         boolean night = prefs.weather() && weather.hasReading() ? !weather.day() : isNight();
         boolean starry = sky == Weather.CLEAR || sky == Weather.PARTLY;
         starsView.setRunning(starsOk && prefs.stars() && resumed && night && starry);
-        skyView.set(sky, prefs.skyStrength(), prefs.weather() && weather.hasReading() ? weather.amount() : 1f);
+        skyView.set(sky, prefs.skyStrength(), sky == Weather.RAIN || sky == Weather.SNOW ? weather.amount() : 1f);
         skyView.setRunning(resumed && !ambient);
     }
 

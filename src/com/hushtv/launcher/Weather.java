@@ -24,6 +24,7 @@ final class Weather {
     /** How long a reading is shown before a new one is fetched. */
     static final long FRESH_MILLIS = 30 * 60_000L;
     /** A reading older than this is not shown at all. */
+    private static final long RETRY_MILLIS = 15 * 60_000L;
     private static final long STALE_MILLIS = 3 * 60 * 60_000L;
 
     static final int CLEAR = 0, PARTLY = 1, CLOUD = 2, FOG = 3, RAIN = 4, SNOW = 5, STORM = 6;
@@ -44,7 +45,10 @@ final class Weather {
     }
 
     boolean due() {
-        return place() != null && System.currentTimeMillis() - sp.getLong("weather_at", 0) > FRESH_MILLIS;
+        long now = System.currentTimeMillis();
+        // After a failed try, wait a while rather than asking again every time the home screen shows.
+        return place() != null && now - sp.getLong("weather_at", 0) > FRESH_MILLIS
+                && now - sp.getLong("weather_tried_at", 0) > RETRY_MILLIS;
     }
 
     float tempC() { return sp.getFloat("weather_temp", 0f); }
@@ -117,7 +121,7 @@ final class Weather {
             sp.edit().putString("weather_place", name)
                     .putFloat("weather_lat", (float) r.getDouble("latitude"))
                     .putFloat("weather_lon", (float) r.getDouble("longitude"))
-                    .remove("weather_at").commit();
+                    .remove("weather_at").remove("weather_tried_at").commit();
             return country.isEmpty() ? name : name + ", " + country;
         } catch (JSONException e) {
             throw new IOException(e);
@@ -125,12 +129,13 @@ final class Weather {
     }
 
     void clearPlace() {
-        sp.edit().remove("weather_place").remove("weather_at").apply();
+        sp.edit().remove("weather_place").remove("weather_at").remove("weather_tried_at").apply();
     }
 
     /** Fetches the current conditions for the chosen town. Call off the UI thread. */
     void refresh() throws IOException {
         if (place() == null) return;
+        sp.edit().putLong("weather_tried_at", System.currentTimeMillis()).apply();
         try {
             String url = String.format(Locale.US, "https://api.open-meteo.com/v1/forecast?latitude=%.2f"
                             + "&longitude=%.2f&current=temperature_2m,weather_code,is_day"

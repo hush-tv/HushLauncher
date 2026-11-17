@@ -61,7 +61,8 @@ the download link on GitHub.
 - Shortcuts to the TV's ad-personalisation and usage-data settings.
 
 **Everything else**
-- All apps drawer (5, 6 or 7 columns) with your home-row apps first.
+- All apps drawer (5, 6 or 7 columns) with your home-row apps first, then the rest under Watch,
+  Listen, Play, and Apps and tools. Grouping can be turned off in Settings → All apps → Group by type.
 - Hold OK on a tile to move it, change its picture or remove it.
 - Open a chosen app automatically at start-up.
 - Back up all settings to a file and restore them later.
@@ -78,6 +79,9 @@ refuses to look up known advertising and tracking domains. It applies to every a
 that uses the system's DNS, not only the home screen. After switching, Hush checks the
 connection; if the service can't be reached from your network, the previous setting is put back
 automatically.
+
+This is tracker blocking for privacy, not an ad blocker: it won't remove ads that are part of the
+video itself (YouTube, Prime Video, live TV).
 
 | Choice | What it blocks | Pick it if |
 |---|---|---|
@@ -131,6 +135,13 @@ the same job for every device at home: in its settings, set the DNS servers to A
 
 Requires Android TV, Google TV or Fire OS based on Android 8 or newer. On lower-powered devices, the weather effects and glow can be
 reduced or switched off in Settings.
+
+## Recommended free apps
+
+- **SmartTube**: YouTube without ads, from [github.com/yuliskov/SmartTube](https://github.com/yuliskov/SmartTube).
+- **VLC**: plays almost any video or music file, from the Google Play Store or [videolan.org](https://www.videolan.org/).
+- **Kodi**: a media centre for your own films, shows and music, from the Play Store or [kodi.tv](https://kodi.tv/).
+- **Downloader** (by AFTVnews): installs apps from a web address, from the Play Store or Amazon Appstore.
 
 ## Installation
 
@@ -210,6 +221,7 @@ blocking. `tools/install.sh <tv-ip>` runs the first four.
 | Up | Corner buttons (network, VPN, all apps, settings) |
 | Down | All apps, if Settings → All apps → Down opens all apps is on |
 | Menu | All apps |
+| Up / Down in all apps | The tile above or below, even in a shorter row; group titles are skipped |
 | Back | Close the open panel |
 
 ## Customisation

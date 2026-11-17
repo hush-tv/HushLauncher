@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.32
+
+- All apps groups the apps that aren't on your home row under Watch, Listen, Play, and Apps and
+  tools. Turn it off in Settings → All apps → Group by type.
+- Group titles are easier to tell apart from app names: larger, with a bar in your outline colour
+  and the number of apps beside them. App names show on the selected app only.
+- Better sorting into groups: fewer apps land in the wrong place because of a short word in their
+  name (for example "tv" or "file"), and more well-known apps are recognised.
+- Up and Down in all apps go to the tile directly above or below, even when the next row is
+  shorter, and the group's title comes into view as you reach its first row.
+- Privacy page: clearer titles for the computer and router steps, and a note that tracker blocking
+  is for privacy and can't remove ads inside videos.
+- Get started: before opening Accessibility, explains Android's screen warning and what Hush does
+  with it. On TVs whose home-screen setting doesn't work, it goes straight to the Home button step.
+- Fog and other weather without rain or snow no longer redraw the wallpaper effect needlessly.
+- After a failed weather update, Hush waits 15 minutes before trying again.
+- Uses less memory while another app is open, and skips some preloading on low-memory TVs.
+
 ## 1.31
 
 - Rain on the wallpaper now matches the forecast: drizzle is a few light drops, heavy rain is

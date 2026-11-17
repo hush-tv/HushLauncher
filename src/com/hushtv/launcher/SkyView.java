@@ -48,6 +48,8 @@ final class SkyView extends View {
 
     /** @param strength 0 switches the effect off; 1 is normal, 0.55 subtle. */
     void set(int kind, float strength, float amount) {
+        // Only rain and snow use the amount, so a change in anything else mustn't rebuild them.
+        if (kind != Weather.RAIN && kind != Weather.SNOW) amount = 1f;
         if (this.kind == kind && this.strength == strength && this.amount == amount) return;
         this.kind = kind;
         this.strength = strength;

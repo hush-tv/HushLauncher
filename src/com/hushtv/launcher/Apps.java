@@ -40,27 +40,36 @@ final class Apps {
     static final int WATCH = 0, LISTEN = 1, PLAY = 2, TOOLS = 3;
     static final String[] GROUP_NAMES = {"Watch", "Listen", "Play", "Apps and tools"};
 
+    /*
+     * Hints of four letters or fewer must start a part of the package name (split on '.' and '_'),
+     * so "file" doesn't match "profile" and "itv" doesn't match every "...itv..." by accident.
+     * Longer hints can appear anywhere in the name.
+     */
     private static final String[] WATCH_HINTS = {"netflix", "youtube", "primevideo", "amazon.avod", "disney",
             "hulu", "hbo", "plex", "jellyfin", "emby", "kodi", "xbmc", "stremio", "vlc", "mxtech",
-            "tivimate", "iptv", "m3u", "mpv", "smarttube", "twitch", "bbc", "itv", "channel4", "nowtv", "sky",
-            "paramount", "peacock", "appletv", "crunchyroll", "pluto", "tubi", "dazn", "espn", "video",
-            "player", "movie", "tv.", ".tv"};
+            "tivimate", "iptv", "m3u", "mpv", "smarttube", "twitch", "bbc", "iplayer", "itv", "channel4",
+            "nowtv", "sky", "paramount", "peacock", "appletv", "atve", "crunchyroll", "pluto", "plutotv",
+            "tubi", "wbd", "cbs", "dazn", "espn", "video", "player", "movie"};
     private static final String[] LISTEN_HINTS = {"spotify", "music", "tidal", "deezer", "soundcloud",
-            "pandora", "audible", "podcast", "radio", "tunein", "sonos", "plexamp"};
+            "pandora", "audible", "podcast", "radio", "tunein", "sonos", "plexamp", "mp3", "sirius"};
     private static final String[] PLAY_HINTS = {"game", "geforcenow", "stadia", "xcloud", "xbox",
-            "retroarch", "emulator", "moonlight", "steamlink", "playstation", "tegrazone"};
+            "retroarch", "emulator", "moonlight", "limelight", "steamlink", "playstation", "tegrazone"};
     /** Sport and live-stream apps whose names might otherwise look like games. */
-    private static final String[] LIVE_HINTS = {"nba", "nfl", "nhl", "mlb", "dazn", "espn", "kick.", "twitch", "fubo"};
+    private static final String[] LIVE_HINTS = {"nba", "nfl", "nhl", "mlb", "dazn", "espn", "kick", "twitch", "fubo"};
+    private static final String[] TOOL_HINTS = {"settings", "downloader", "browser", "file", "xplore",
+            "vending", "vpn", "nordvpn", "expressvpn", "surfshark", "gallery", "weather", "mapper",
+            "launcher", "upgrade", "aptoide", "mozilla", "firefox"};
 
     /** Puts an app under Watch, Listen, Play or Apps and tools, from what it says it is and its name. */
     static int groupOf(String pkg, ApplicationInfo info) {
         String p = pkg.toLowerCase(java.util.Locale.ROOT);
+        String[] parts = p.split("[._]");
         // Names first: apps often label themselves oddly (VLC says audio, file managers say game).
-        for (String h : LIVE_HINTS) if (p.contains(h)) return WATCH;
-        for (String h : TOOL_HINTS) if (p.contains(h)) return TOOLS;
-        for (String h : PLAY_HINTS) if (p.contains(h)) return PLAY;
-        for (String h : LISTEN_HINTS) if (p.contains(h)) return LISTEN;
-        for (String h : WATCH_HINTS) if (p.contains(h)) return WATCH;
+        if (matches(p, parts, LIVE_HINTS)) return WATCH;
+        if (matches(p, parts, TOOL_HINTS)) return TOOLS;
+        if (matches(p, parts, PLAY_HINTS)) return PLAY;
+        if (matches(p, parts, LISTEN_HINTS)) return LISTEN;
+        if (matches(p, parts, WATCH_HINTS)) return WATCH;
         if (info != null) {
             if (info.category == ApplicationInfo.CATEGORY_VIDEO) return WATCH;
             if (info.category == ApplicationInfo.CATEGORY_AUDIO) return LISTEN;
@@ -69,8 +78,16 @@ final class Apps {
         return TOOLS;
     }
 
-    private static final String[] TOOL_HINTS = {"settings", "downloader", "browser", "file", "xplore",
-            "vending", "vpn", "gallery", "weather", "mapper", "launcher", "upgrade"};
+    private static boolean matches(String p, String[] parts, String[] hints) {
+        for (String h : hints) {
+            if (h.length() > 4) {
+                if (p.contains(h)) return true;
+            } else {
+                for (String part : parts) if (part.startsWith(h)) return true;
+            }
+        }
+        return false;
+    }
 
     /**
      * Apps put first on a new user's home row when they are installed, in this order. Anything
