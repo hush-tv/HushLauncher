@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_redirect_description">Opens this launcher whenever Amazon\'s home screen appears, so the Home button brings you here. It is only told when Amazon\'s home screen opens and cannot read what is on screen.</string>
+</resources>
