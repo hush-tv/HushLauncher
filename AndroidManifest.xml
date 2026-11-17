@@ -45,7 +45,7 @@
             </intent-filter>
         </service>
         <!-- Fire TV only, and off until enabled as an accessibility service. See README. -->
-        <service android:name=".HomeRedirectService" android:exported="true" android:label="Home button redirect"
+        <service android:name=".HomeRedirectService" android:exported="true" android:label="Hush Home button"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

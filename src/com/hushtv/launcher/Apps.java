@@ -34,18 +34,31 @@ final class Apps {
         boolean ownOnly;   // the user chose this app's own banner, whatever the pack
     }
 
-    /** Home row used the first time the launcher runs, in order. Missing apps are skipped. */
+    /**
+     * Apps put first on a new user's home row when they are installed, in this order. Anything
+     * else installed fills the rest of the row, so a new home screen is never empty.
+     */
     private static final String[] DEFAULT_HOME = {
-            "ar.tvplayer.tv",
-            "com.stremio.one",
             "com.google.android.youtube.tv",
-            "com.hushtv.m3uplayer",
-            "com.nbaimd.gametime.nba2011",
-            "com.nordvpn.android",
-            "com.hushtv.commercialplayer",
-            "com.spotify.tv.android",
+            "com.netflix.ninja",
+            "com.amazon.amazonvideo.livingroom",
+            "com.disney.disneyplus",
+            "com.plexapp.android",
+            "org.jellyfin.androidtv",
             "org.xbmc.kodi",
+            "com.spotify.tv.android",
+            "com.hbo.hbonow",
+            "com.apple.atve.androidtv.appletv",
+            "tv.twitch.android.app",
+            "com.stremio.one",
+            "com.teamsmart.videomanager.tv",
     };
+    /** Never put on a new user's row by themselves: system tools, stores and Hush itself. */
+    private static final String[] NOT_DEFAULT = {
+            "com.android.tv.settings", "com.android.vending", "com.hushtv.launcher",
+            "com.google.android.tvlauncher", "com.google.android.apps.tv.launcherx",
+    };
+    private static final int DEFAULT_COUNT = 8;
 
     private static final String PREFS = "home";
     private static final String KEY_HOME = "home_packages";
@@ -195,6 +208,7 @@ final class Apps {
     /** Home row apps in order, skipping anything not installed. */
     List<App> homeApps(List<App> all) {
         List<App> out = new ArrayList<>();
+        boolean chosen = prefs.getString(KEY_HOME, null) != null;
         for (String pkg : homePackages()) {
             for (App a : all) {
                 if (a.pkg.equals(pkg)) {
@@ -203,9 +217,20 @@ final class Apps {
                 }
             }
         }
-        // Nothing from the default list is installed and nothing has been chosen yet: show what there is.
-        if (out.isEmpty() && prefs.getString(KEY_HOME, null) == null) {
-            out.addAll(all.subList(0, Math.min(9, all.size())));
+        // Nothing chosen yet: fill the row with what this TV has, so it never starts empty.
+        if (!chosen) {
+            java.util.Set<String> launchers = new java.util.HashSet<>();
+            for (android.content.pm.ResolveInfo r : ctx.getPackageManager().queryIntentActivities(
+                    new android.content.Intent(android.content.Intent.ACTION_MAIN)
+                            .addCategory(android.content.Intent.CATEGORY_HOME), 0)) {
+                launchers.add(r.activityInfo.packageName);
+            }
+            for (App a : all) {
+                if (launchers.contains(a.pkg)) continue;
+                if (out.size() >= DEFAULT_COUNT) break;
+                if (out.contains(a) || Arrays.asList(NOT_DEFAULT).contains(a.pkg)) continue;
+                out.add(a);
+            }
         }
         return out;
     }

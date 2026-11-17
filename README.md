@@ -77,9 +77,9 @@ automatically.
 
 | Choice | What it blocks |
 |---|---|
-| AdGuard | Ads and trackers |
-| Mullvad | Ads and trackers |
-| Quad9 | Malware and phishing sites |
+| AdGuard | Many ads and trackers |
+| Mullvad | Many ads and trackers |
+| Quad9 | Known malware and phishing sites |
 
 This uses Android's built-in Private DNS feature, which needs Android 9 or newer; on Android 8
 the tracker-blocking choices are not shown. Android only lets an app
@@ -112,9 +112,12 @@ adb shell pm grant com.hushtv.launcher android.permission.WRITE_SECURE_SETTINGS
 | Nvidia Shield TV (all models) | Fully tested |
 | Chromecast with Google TV, Google TV Streamer, onn, Xiaomi Mi Box | Supported |
 | TVs with Android TV or Google TV built in | Supported |
-| Amazon Fire TV | Supported, with one extra step ([Fire TV](#fire-tv)) |
+| Amazon Fire TV and Fire TV Stick | Supported; Home button through the [Hush Home button](#home-button-on-fire-tv-and-google-tv) service |
+| Android TV boxes (Formuler, Dynalink, Homatics and others) | Supported |
+| Apple TV, Roku, Samsung (Tizen), LG (webOS) | Not possible: these do not run Android apps |
+| Android phones and tablets | Not supported: Hush is designed for a remote, not touch |
 
-Requires Android 8 or newer. On lower-powered devices, the weather effects and glow can be
+Requires Android TV, Google TV or Fire OS based on Android 8 or newer. On lower-powered devices, the weather effects and glow can be
 reduced or switched off in Settings.
 
 ## Installation
@@ -125,29 +128,59 @@ The latest version is always available at:
 https://github.com/hush-tv/HushLauncher/releases/latest/download/launcher.apk
 ```
 
-### On the TV
+### On the TV (no computer needed)
 
-1. Install **Downloader** (by AFTVnews) from your TV's app store.
-2. Enter the code **2573570** and install Hush when prompted. (The code opens the link above.) Allow installs from unknown sources if
-   asked.
-3. Press Home and choose Hush. If the TV does not ask, use the computer method below to set it
-   as the home screen.
+**1. Install Downloader.** Search for **Downloader** (by AFTVnews, orange icon) in the Google
+Play Store or the Amazon Appstore and install it.
 
-### From a computer
+**2. Allow Downloader to install apps.** Android asks for this once, per app.
 
-Turn on Developer options on the TV (Settings → Device Preferences → About, press **Build**
-seven times), then turn on **Network debugging** under Developer options and note the TV's IP
-address.
+- **Google TV / Android TV:** if Downloader doesn't ask by itself, go to Settings → Apps →
+  Security & restrictions → Unknown sources → turn on **Downloader**. On some Google TV devices
+  this option only appears after turning on developer mode: Settings → System → About → press
+  **Android TV OS build** seven times.
+- **Fire TV:** Settings → My Fire TV → About → press your device's name seven times, press Back,
+  then Developer options → Install unknown apps → turn on **Downloader**.
+
+**3. Install Hush.** Open Downloader, enter the code **2573570** and choose **Install**.
+
+**4. Open Hush.** Choose **Open** at the end of the install. Later you can find it under
+Apps → See all apps (Google TV) or by holding Home → Apps (Fire TV); it is near the end of the list.
+
+**5. Follow Get started.** The guide opens by itself the first time and walks through:
+- **Making Hush your home screen.** Opens the TV's home-screen setting. On TVs without one
+  (Fire TV and most Google TV devices) it opens Accessibility instead: turn on
+  **Hush Home button**, and the Home button opens Hush. On Fire TV, Amazon's home screen may
+  flash for a moment before Hush appears; that is expected.
+- **Choosing your apps**, **picking a wallpaper**, **showing the weather** and **privacy**.
+
+The row starts with the apps already on your TV.
+
+### With Claude or another AI assistant
+
+An assistant that can run commands on your computer can find the TV on your Wi-Fi and do the
+whole setup, including tracker blocking. See [Set up with an AI assistant](SETUP_WITH_CLAUDE.md)
+for the prompt to paste and the steps it follows.
+
+### From a computer, by hand
+
+Turn on developer options on the TV, then turn on **USB debugging** / **Network debugging**
+(Fire TV: **ADB debugging**) in Developer options and note the TV's IP address:
+
+- Android TV: Settings → Device Preferences → About → press **Build** seven times.
+- Google TV: Settings → System → About → press **Android TV OS build** seven times.
+- Fire TV: Settings → My Fire TV → About → press the device name seven times.
 
 ```bash
 adb connect <tv-ip>:5555
 adb install launcher.apk
 adb shell cmd package compile -m speed -f com.hushtv.launcher
 adb shell cmd package set-home-activity com.hushtv.launcher/.HomeActivity
+adb shell pm grant com.hushtv.launcher android.permission.WRITE_SECURE_SETTINGS
 ```
 
-The compile step is optional but recommended: it pre-compiles Hush so it starts faster and
-uses less memory. `tools/install.sh <tv-ip>` runs all four commands.
+The compile step makes Hush start faster and use less memory. The last command allows tracker
+blocking. `tools/install.sh <tv-ip>` runs the first four.
 
 ## Controls
 
@@ -173,24 +206,32 @@ Hush reads these folders under `/sdcard/Android/data/com.hushtv.launcher/files/`
 
 Files can be copied with `adb push` or from a USB drive using the TV's file manager.
 
+## Getting back to the normal home screen
+
+- **Open the TV's settings from Hush:** press Up, then the gear icon, then System → Android settings.
+- **Stop the Home button opening Hush:** turn off **Hush Home button** in Accessibility, or choose
+  the TV's own launcher in its home-screen setting.
+- **If the Home button keeps bouncing to Hush** when you don't want it to, Hush pauses the
+  Home button service by itself after several quick repeats, so the TV's home screen stays up for a
+  minute while you turn it off.
+
 ## Uninstalling
 
-1. If tracker blocking is on, set Settings → Privacy → **Don't block** first. Android keeps the
-   DNS setting after an app is removed.
+1. Turn off **Hush Home button** in Accessibility if you use it, and if tracker blocking is on,
+   set Settings → Privacy → **Don't block**. Android keeps both after an app is removed.
 2. Remove Hush from the TV's Settings → Apps, or with `adb uninstall com.hushtv.launcher`.
 3. Press Home. The TV goes back to its own home screen. If you set Hush as the home screen over
    adb, that choice is cleared automatically when Hush is removed.
 
-On Fire TV, run the disable command under [Fire TV](#fire-tv) before uninstalling.
 
 ## FAQ
 
 **Is there more than one row?** No. Hush shows one row of the apps you choose; everything else
 is in the All apps drawer (Up, then the grid button).
 
-**Do I need a computer?** Only for tracker blocking (one command), for setting Hush as the home
-screen on TVs that don't offer a choice, and for the Fire TV Home button. Everything else works
-from the remote.
+**Do I need a computer?** No, except for tracker blocking (one command), and on Fire TV versions
+that hide Hush Home button from Accessibility. An [AI assistant](SETUP_WITH_CLAUDE.md) can do
+both for you.
 
 **Does the TV switch back to its own home screen after a system update?** Usually not. If it
 does, press Home and choose Hush again, or run the `set-home-activity` command.
@@ -226,25 +267,30 @@ tools/backup.sh <tv-ip>
 tools/restore.sh <tv-ip> <backup-folder>
 ```
 
-## Fire TV
+## Home button on Fire TV and Google TV
 
-Fire OS does not allow a different home screen, so Hush runs as a regular app there. To make the
-Home button open Hush, it includes an optional accessibility service that opens Hush whenever
-Amazon's home screen appears. It is notified only when that screen opens and cannot read
-screen content. Enable it over adb (any accessibility services you already use stay on):
+Some TVs don't let you pick a different home screen: Fire TV, and many Google TV devices. On
+those, Hush includes an optional **Hush Home button** service that opens Hush whenever the
+built-in home screen appears, so the Home button lands on Hush. It is only told when the
+built-in home screen opens and cannot read anything on screen.
+
+**On the TV:** Settings → Accessibility (on Google TV: Settings → System → Accessibility) → open
+**Hush Home button** and turn it on. The Get started guide takes you there.
+
+**If it isn't listed** (some Fire TV versions hide it), switch it on from a computer, or let an
+[AI assistant](SETUP_WITH_CLAUDE.md) do it. Any accessibility services you already use stay on:
 
 ```bash
 adb shell 'S=com.hushtv.launcher/com.hushtv.launcher.HomeRedirectService; C=$(settings get secure enabled_accessibility_services); case "$C" in null|"") N=$S;; *$S*) N=$C;; *) N=$C:$S;; esac; settings put secure enabled_accessibility_services "$N"; settings put secure accessibility_enabled 1'
 ```
 
-To disable it (other accessibility services you use are left on):
+To turn it off again, switch it off in Accessibility, or (leaving your other services on):
 
 ```bash
 adb shell 'S=com.hushtv.launcher/com.hushtv.launcher.HomeRedirectService; C=$(settings get secure enabled_accessibility_services); N=$(echo "$C" | sed "s#:$S##; s#$S:##; s#$S##"); if [ -z "$N" ]; then settings delete secure enabled_accessibility_services; else settings put secure enabled_accessibility_services "$N"; fi'
 ```
 
-Fire OS may turn the service off after a system update; run the first command again if that
-happens.
+A system update may turn the service off; turn it on again the same way.
 
 ## Performance
 

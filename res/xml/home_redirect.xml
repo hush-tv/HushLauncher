@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The service is told only when Amazon's home screen opens, and cannot read screen content. -->
+<!-- The service is told only when the TV's built-in home screen opens, and cannot read screen content. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="false"
     android:description="@string/home_redirect_description"
     android:notificationTimeout="0"
-    android:packageNames="com.amazon.tv.launcher" />
+    android:packageNames="com.amazon.tv.launcher,com.google.android.apps.tv.launcherx,com.google.android.tvlauncher" />

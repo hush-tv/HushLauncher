@@ -252,6 +252,14 @@ public final class HomeActivity extends Activity {
         applyIntentConfig(getIntent());
         applyLayoutSettings();
         applyWallpaper();
+        if (!setupDone() && !getSharedPreferences("home", MODE_PRIVATE).getBoolean("setup_shown", false)) {
+            getSharedPreferences("home", MODE_PRIVATE).edit().putBoolean("setup_shown", true).apply();
+            getWindow().getDecorView().postDelayed(() -> {
+                showOverlay(SETTINGS);
+                settingsPage = "Get started";
+                buildSettingsList(null);
+            }, 900);
+        }
         bootPending = apps.firstRunThisBoot(
                 Settings.Global.getInt(getContentResolver(), Settings.Global.BOOT_COUNT, -1));
 
@@ -864,6 +872,11 @@ public final class HomeActivity extends Activity {
         if (settingsPage == null) {
             settingsTitle.setText("Settings");
             settingsHint.setText("Changes show on the home screen as you make them.");
+            if (!setupDone()) settingsList.addView(row(IconView.APPS, "Get started", "A few quick steps to make Hush yours",
+                    "\u203A", "Get started", v -> {
+                        settingsPage = "Get started";
+                        buildSettingsList(null);
+                    }));
             for (Object[] page : PAGES) {
                 final String name = (String) page[0];
                 settingsList.addView(row((Integer) page[2], name, (String) page[1], "\u203A", name, v -> {
@@ -901,12 +914,13 @@ public final class HomeActivity extends Activity {
         }
         if (settingsPage.equals("Tiles")) settingsList.addView(iconPackRow());
         if (settingsPage.equals("Privacy")) buildPrivacyRows();
+        if (settingsPage.equals("Get started")) buildSetupRows();
         if (settingsPage.equals("System")) {
             settingsList.addView(row(-1, "Android settings", "Network, display, apps and more", "\u203A",
                     "android", v -> startSafely(new Intent(Settings.ACTION_SETTINGS))));
+            settingsList.addView(row(-1, "Hush Home button", "For TVs without a home-screen setting. Turned on or off in Accessibility",
+                    redirectEnabled() ? "On" : "Off", "redirect", v -> startSafely(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))));
             if (isFireTv()) {
-                settingsList.addView(row(-1, "Home button redirect", "Switched on and off from a computer",
-                        redirectEnabled() ? "On" : "Off", "redirect", null));
                 settingsList.addView(row(-1, "Amazon's home screen", "Opens it and leaves it alone for 5 minutes",
                         "\u203A", "amazon", v -> {
                             HomeRedirectService.pause(5 * 60_000);
@@ -1092,6 +1106,62 @@ public final class HomeActivity extends Activity {
         return row.findViewById(android.R.id.text2);
     }
 
+    private boolean setupDone() {
+        return getSharedPreferences("home", MODE_PRIVATE).getBoolean("setup_done", false);
+    }
+
+    /** True when the TV opens Hush for the Home button, by setting or through the Home button service. */
+    private boolean isHomeScreen() {
+        Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
+        android.content.pm.ResolveInfo r = getPackageManager().resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
+        if (r != null && r.activityInfo != null && getPackageName().equals(r.activityInfo.packageName)) return true;
+        return redirectEnabled();
+    }
+
+    /** First-run guide: each step opens the place where it is done. */
+    private void buildSetupRows() {
+        settingsHint.setText("Each step is optional. You can come back here from Settings.");
+        boolean home = isHomeScreen();
+        settingsList.addView(row(-1, "1. Make Hush your home screen",
+                home ? "Done: the Home button opens Hush"
+                        : "Opens the TV's setting. If there isn't one, turn on \u201CHush Home button\u201D in Accessibility",
+                home ? "\u2713" : "\u203A", "setup_home", v -> {
+                    Intent pick = new Intent(Settings.ACTION_HOME_SETTINGS);
+                    if (pick.resolveActivity(getPackageManager()) != null) startSafely(pick);
+                    else {
+                        notice(isFireTv() ? "Turn on \u201CHush Home button\u201D. If it isn't listed, this Fire TV hides it: see github.com/hush-tv/HushLauncher"
+                                : "Choose \u201CHush Home button\u201D and turn it on");
+                        startSafely(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                    }
+                }));
+        settingsList.addView(row(-1, "2. Choose your apps", "Hold OK on any app to add it to the row or take it off",
+                "\u203A", "setup_apps", v -> {
+                    showOverlay(DRAWER);
+                    notice("Hold OK on an app to add it to your row");
+                }));
+        settingsList.addView(row(-1, "3. Pick a wallpaper", "Built-in scenes or your own pictures", "\u203A",
+                "setup_wall", v -> {
+                    settingsPage = "Wallpaper";
+                    wallpaperBefore = currentWallpaper();
+                    settingsGallery = 1;
+                    buildSettingsList(null);
+                }));
+        settingsList.addView(row(-1, "4. Show the weather", weather.place() == null ? "Type your town" : weather.place(),
+                weather.place() == null ? "\u203A" : "\u2713", "setup_weather", v -> {
+                    prefs.set("weather", 1);
+                    refreshWeather();
+                    askWeatherPlace();
+                }));
+        settingsList.addView(row(-1, "5. Privacy", "Tracker blocking and ad settings", "\u203A", "setup_privacy", v -> {
+            settingsPage = "Privacy";
+            buildSettingsList(null);
+        }));
+        settingsList.addView(row(-1, "Finish", "Hide this guide", "", "setup_done", v -> {
+            getSharedPreferences("home", MODE_PRIVATE).edit().putBoolean("setup_done", true).apply();
+            showOverlay(NONE);
+        }));
+    }
+
     /** Tracker blocking (Private DNS) and a shortcut to the TV's own ad settings. */
     private void buildPrivacyRows() {
         settingsHint.setText("Hush itself collects nothing. With blocking on, the TV's address lookups go to the service you pick.");
@@ -1100,12 +1170,14 @@ public final class HomeActivity extends Activity {
         } else {
         final boolean allowed = Privacy.canChange(this);
         final int now = Privacy.current(this);
-        for (int i = 0; i < Privacy.SERVICES.length; i++) {
+        if (!allowed) settingsList.addView(row(-1, "Tracker blocking: one-time setup",
+                "Android only allows it after one command from a computer or AI assistant. Steps: github.com/hush-tv/HushLauncher#privacy",
+                "", "dns_setup", null));
+        else for (int i = 0; i < Privacy.SERVICES.length; i++) {
             final int index = i;
             String[] svc = Privacy.SERVICES[i];
             String title = i == 0 ? "Don't block" : (i == 3 ? "Block malware with " : "Block trackers with ") + svc[0];
             String sub = svc[1];
-            if (!allowed && i > 0) sub = "Needs one command from a computer first (see the guide)";
             settingsList.addView(row(-1, title, sub, index == now ? "\u2713" : "", "dns" + i, v -> {
                 if (!Privacy.set(this, index, ok -> {
                     if (ok) notice(index == 0 ? "Tracker blocking off"

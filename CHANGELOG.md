@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.27
+
+Easier setup.
+
+- **Get started guide** opens the first time Hush runs: home screen, apps, wallpaper, weather
+  and privacy, each one step away.
+- A new home row starts with the apps already on the TV instead of a fixed list, so it is never
+  empty.
+- **Hush Home button** now works on Google TV devices that have no home-screen setting, as well
+  as Fire TV, and can be switched on from the TV's Accessibility settings.
+- New guide for setting up with an AI assistant that finds the TV on your network.
+
 ## 1.26
 
 First public release.

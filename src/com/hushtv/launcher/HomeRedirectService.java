@@ -6,16 +6,23 @@ import android.os.SystemClock;
 import android.view.accessibility.AccessibilityEvent;
 
 /**
- * For Fire TV, where the system will not let another app be the home screen: whenever Amazon's
- * home screen comes to the front, open this launcher instead. That makes the Home button (and
- * start-up) land here.
+ * For TVs that will not let another app be the home screen (Fire TV, and Google TV devices that
+ * have no home-screen setting): whenever the built-in home screen comes to the front, open this
+ * launcher instead. That makes the Home button (and start-up) land here. It can be switched on
+ * from the TV's own Accessibility settings, so no computer is needed.
  *
- * It is declared to receive events from Amazon's launcher only and cannot read screen content.
+ * It is declared to receive events from the built-in launchers only and cannot read screen content.
  * It does nothing until someone enables it as an accessibility service.
  */
 public final class HomeRedirectService extends AccessibilityService {
 
     static final String AMAZON_HOME = "com.amazon.tv.launcher";
+    /** Built-in home screens: package, and a part of the home activity's class name. */
+    private static final String[][] HOMES = {
+            {AMAZON_HOME, "HomeActivity"},
+            {"com.google.android.apps.tv.launcherx", "HomeActivity"},
+            {"com.google.android.tvlauncher", "MainActivity"},
+    };
 
     /** Redirecting is skipped until this time (elapsed-realtime ms), so Amazon's home can be used on purpose. */
     private static volatile long pausedUntil;
@@ -31,12 +38,12 @@ public final class HomeRedirectService extends AccessibilityService {
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
-        if (!AMAZON_HOME.contentEquals(String.valueOf(event.getPackageName()))) return;
-        // Amazon's settings screens live in the same package as its home screen; only the home
+        String pkg = String.valueOf(event.getPackageName()), cls = String.valueOf(event.getClassName());
+        // Built-in settings screens live in the same package as its home screen; only the home
         // screen itself is redirected. Opening Amazon's settings brings its home screen up for
         // an instant first, so the redirect has to happen straight away: the settings screen
         // then opens on top of this launcher. A delayed redirect would land on top of settings.
-        if (String.valueOf(event.getClassName()).contains("HomeActivity")) openLauncher();
+        for (String[] h : HOMES) if (h[0].equals(pkg) && cls.contains(h[1])) openLauncher();
     }
 
     private void openLauncher() {
