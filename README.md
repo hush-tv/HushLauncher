@@ -79,13 +79,14 @@ that uses the system's DNS, not only the home screen. After switching, Hush chec
 connection; if the service can't be reached from your network, the previous setting is put back
 automatically.
 
-| Choice | What it blocks |
-|---|---|
-| AdGuard | Many ads and trackers |
-| Mullvad | Many ads and trackers |
-| Quad9 | Known malware and phishing sites |
+| Choice | What it blocks | Pick it if |
+|---|---|---|
+| **AdGuard** (recommended) | The most ads and trackers | You're not sure: start here |
+| Mullvad | Ads and trackers | You'd rather trust a no-logs VPN company |
+| Quad9 | Scam and malware sites only | An app or login breaks with the others |
 
-The service you choose sees which sites your TV looks up. All three publish no-logging policies.
+Only one can be on at a time; that's how Android's Private DNS works. The service you choose
+sees which sites your TV looks up. All three publish no-logging policies.
 
 This uses Android's built-in Private DNS feature, which needs Android 9 or newer; on Android 8
 the tracker-blocking choices are not shown. Android only lets an app
@@ -94,6 +95,10 @@ change it after one command from a computer:
 ```bash
 adb shell pm grant com.hushtv.launcher android.permission.WRITE_SECURE_SETTINGS
 ```
+
+**No computer?** Most TVs don't show a Private DNS setting of their own, but your router can do
+the same job for every device at home: in its settings, set the DNS servers to AdGuard's
+`94.140.14.14` and `94.140.15.15`.
 
 **Limits:**
 

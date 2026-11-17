@@ -27,6 +27,8 @@ final class SkyView extends View {
     private final Matrix nearM = new Matrix(), farM = new Matrix();
     private int kind = Weather.CLEAR;
     private float strength = 1f;
+    /** How much is falling: 0.3 for drizzle up to 1 for heavy rain. */
+    private float amount = 1f;
     private boolean running;
     private long last;
     private float nearY, farY, nearX, farX, flashLeft, clock;
@@ -45,10 +47,11 @@ final class SkyView extends View {
     }
 
     /** @param strength 0 switches the effect off; 1 is normal, 0.55 subtle. */
-    void set(int kind, float strength) {
-        if (this.kind == kind && this.strength == strength) return;
+    void set(int kind, float strength, float amount) {
+        if (this.kind == kind && this.strength == strength && this.amount == amount) return;
         this.kind = kind;
         this.strength = strength;
+        this.amount = amount;
         build();
         update();
     }
@@ -78,8 +81,10 @@ final class SkyView extends View {
         if (!active()) return;
         boolean snow = kind == Weather.SNOW, storm = kind == Weather.STORM;
         if (kind == Weather.RAIN || storm || snow) {
-            near.setShader(texture(storm ? 70 : snow ? 26 : 38, snow, 1.0f));
-            far.setShader(texture(storm ? 110 : snow ? 40 : 60, snow, 0.55f));
+            // Fewer, shorter drops for drizzle; the full count for heavy rain and storms.
+            float n = storm ? 1f : amount, drop = 0.6f + 0.4f * n;
+            near.setShader(texture(Math.max(6, Math.round((storm ? 70 : snow ? 26 : 38) * n)), snow, drop));
+            far.setShader(texture(Math.max(8, Math.round((storm ? 110 : snow ? 40 : 60) * n)), snow, 0.55f * drop));
         } else {
             boolean mist = kind == Weather.FOG;
             near.setShader(haze(mist ? 64 : 40, mist, 3));
@@ -143,7 +148,7 @@ final class SkyView extends View {
         if (near.getShader() == null) return;
         boolean snow = kind == Weather.SNOW;
         if (kind == Weather.RAIN || kind == Weather.STORM || snow) {
-            float speed = snow ? h * 0.045f : h * 0.95f;
+            float speed = snow ? h * 0.045f : h * 0.95f * (kind == Weather.STORM ? 1f : 0.65f + 0.35f * amount);
             nearY = (nearY + speed * dt) % TILE;
             farY = (farY + speed * 0.6f * dt) % TILE;
             nearX = snow ? (float) Math.sin(clock * 0.6f) * 14f : (nearX + speed * 0.16f * dt) % TILE;

@@ -65,6 +65,16 @@ final class Weather {
         return RAIN;
     }
 
+    /** How much is falling, from 0.3 (drizzle, light snow) to 1 (heavy rain or snow, storms). */
+    float amount() {
+        switch (code()) {
+            case 51: case 56: case 71: case 77: return 0.3f;
+            case 53: case 55: case 57: case 61: case 80: case 85: return 0.5f;
+            case 63: case 66: case 73: case 81: return 0.75f;
+            default: return 1f;
+        }
+    }
+
     /** The current conditions in a word or two. */
     String words() {
         switch (code()) {

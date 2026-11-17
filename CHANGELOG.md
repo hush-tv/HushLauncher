@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.31
+
+- Rain on the wallpaper now matches the forecast: drizzle is a few light drops, heavy rain is
+  the full shower. Light and moderate snow are gentler too.
+- Tracker blocking: AdGuard is marked as recommended, and each choice says when you'd pick it.
+- Without the one-time computer step, the Privacy page now suggests setting AdGuard's DNS on your
+  router instead.
+
 ## 1.30
 
 - Updates are only downloaded from the project's GitHub releases, and the file is checked before

@@ -26,9 +26,9 @@ final class Privacy {
     /** Name shown, what it blocks, and the DNS-over-TLS host (null = off). */
     static final String[][] SERVICES = {
             {"Off", "Uses the TV's previous DNS setting", null},
-            {"AdGuard", "Blocks many ad and tracker domains", "dns.adguard-dns.com"},
-            {"Mullvad", "Blocks many ad and tracker domains", "adblock.dns.mullvad.net"},
-            {"Quad9", "Blocks malware and phishing domains", "dns.quad9.net"},
+            {"AdGuard", "Blocks the most ads and trackers", "dns.adguard-dns.com"},
+            {"Mullvad", "Ads and trackers, from a no-logs VPN company", "adblock.dns.mullvad.net"},
+            {"Quad9", "Lightest: scam and malware sites only. Try it if an app breaks", "dns.quad9.net"},
     };
 
     static final String GRANT_COMMAND =

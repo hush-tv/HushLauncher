@@ -481,7 +481,7 @@ public final class HomeActivity extends Activity {
             final int k = sky.equals("rain") ? Weather.RAIN : sky.equals("snow") ? Weather.SNOW : sky.equals("storm") ? Weather.STORM
                     : sky.equals("fog") ? Weather.FOG : sky.equals("cloud") ? Weather.CLOUD : Weather.CLEAR;
             row.post(() -> {
-                skyView.set(k, prefs.skyStrength());
+                skyView.set(k, prefs.skyStrength(), 1f);
                 skyView.setRunning(true);
             });
         }
@@ -1271,10 +1271,14 @@ public final class HomeActivity extends Activity {
         if (!allowed) settingsList.addView(row(-1, "Tracker blocking: one-time setup",
                 "Android only allows it after one command from a computer or AI assistant. Steps: github.com/hush-tv/HushLauncher#privacy",
                 "", "dns_setup", null));
+        if (!allowed) settingsList.addView(row(-1, "No computer?",
+                "Set your router's DNS to AdGuard (94.140.14.14 and 94.140.15.15). That blocks for every device at home",
+                "", "dns_router", null));
         else for (int i = 0; i < Privacy.SERVICES.length; i++) {
             final int index = i;
             String[] svc = Privacy.SERVICES[i];
             String title = i == 0 ? "Don't block" : (i == 3 ? "Block malware with " : "Block trackers with ") + svc[0];
+            if (i == 1) title += " (recommended)";
             String sub = svc[1];
             settingsList.addView(row(-1, title, sub, index == now ? "\u2713" : "", "dns" + i, v -> {
                 if (!Privacy.set(this, index, ok -> {
@@ -3208,7 +3212,7 @@ public final class HomeActivity extends Activity {
         boolean night = prefs.weather() && weather.hasReading() ? !weather.day() : isNight();
         boolean starry = sky == Weather.CLEAR || sky == Weather.PARTLY;
         starsView.setRunning(starsOk && prefs.stars() && resumed && night && starry);
-        skyView.set(sky, prefs.skyStrength());
+        skyView.set(sky, prefs.skyStrength(), prefs.weather() && weather.hasReading() ? weather.amount() : 1f);
         skyView.setRunning(resumed && !ambient);
     }
 
