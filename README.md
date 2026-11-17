@@ -5,7 +5,7 @@
 ![Android TV 8+](https://img.shields.io/badge/Android%20TV-8%2B-3ddc84)
 
 Hush is an ad-free home screen for Android TV and Google TV. It replaces the stock launcher's
-sponsored rows, recommendations and autoplaying trailers with a single row of your own apps, a
+sponsored rows, recommendations and autoplaying trailers with a single row of the apps you choose, a
 wallpaper and a clock.
 
 It is free, open source, about 3 MB, and has no account, analytics or advertising.
@@ -23,15 +23,17 @@ It is free, open source, about 3 MB, and has no account, analytics or advertisin
 **Home screen**
 - One row of apps, chosen and ordered by you. The selected tile stays in place and the row
   glides beneath it.
-- Smooth 60 fps scrolling, including when a direction button is held down.
 - Corner buttons for network status, VPN status, all apps and settings.
-- Optional app names, greeting, clock (12 or 24 hour) and local weather.
+- Optional app names, greeting, clock (12 or 24 hour, top left or right, three sizes) and local weather.
+- Corner icons can be hidden.
 - Tiles can fade out when the remote is left alone, leaving only the wallpaper and clock.
 
 **Look and feel**
-- Tile size, position, spacing, corner shape and finish (flat, glass or deep).
+- Tile size, position, spacing, corner shape and finish (flat, glass or deep), a dark tile
+  style, and softening of very bright tile artwork.
 - Selected-tile effects: zoom, outline in a choice of colours or one taken from the wallpaper,
   glow, a soft pool of light in the app's own colour, and a light sweep across the tile.
+  Other tiles can be dimmed, and animation speed set to instant, fast or smooth.
 - Icon packs: installed Android icon-pack apps or folders of images, previewed live on your
   own tiles. Any tile can also be given a picture of its own.
 
@@ -46,14 +48,15 @@ It is free, open source, about 3 MB, and has no account, analytics or advertisin
 **Screensaver**
 - Slowly drifting scenes with a large clock, the date and the weather.
 - The clock moves continuously to avoid screen burn-in.
-- Can show the current wallpaper, your own pictures, or a dim clock on black instead.
+- Can show the current wallpaper, your own pictures, or a dim clock on black instead, changing
+  every 1, 5 or 15 minutes, at three brightness levels.
 
 **Privacy**
 - Tracker blocking for the whole TV (see below).
 - Shortcuts to the TV's ad-personalisation and usage-data settings.
 
 **Everything else**
-- All apps drawer with your home-row apps first.
+- All apps drawer (5, 6 or 7 columns) with your home-row apps first.
 - Hold OK on a tile to move it, change its picture or remove it.
 - Open a chosen app automatically at start-up.
 - Back up all settings to a file and restore them later.
@@ -64,9 +67,11 @@ It is free, open source, about 3 MB, and has no account, analytics or advertisin
 only network request is the optional weather (see [Weather](#weather)), which is off by
 default.
 
-**Tracker blocking:** Settings → Privacy can switch the TV to an encrypted DNS service that
-refuses to connect to known advertising and tracking servers. This applies to every app on the
-TV, not only the home screen.
+**Tracker blocking (Android 9 or newer):** Settings → Privacy can switch the TV to an encrypted DNS service that
+refuses to look up known advertising and tracking domains. It applies to every app on the TV
+that uses the system's DNS, not only the home screen. After switching, Hush checks the
+connection; if the service can't be reached from your network, the previous setting is put back
+automatically.
 
 | Choice | What it blocks |
 |---|---|
@@ -74,14 +79,15 @@ TV, not only the home screen.
 | Mullvad | Ads and trackers |
 | Quad9 | Malware and phishing sites |
 
-This uses Android's built-in Private DNS feature (Android 9 or newer). Android only lets an app
+This uses Android's built-in Private DNS feature, which needs Android 9 or newer; on Android 8
+the tracker-blocking choices are not shown. Android only lets an app
 change it after one command from a computer:
 
 ```bash
 adb shell pm grant com.hushtv.launcher android.permission.WRITE_SECURE_SETTINGS
 ```
 
-**Limits.** Be clear about what a home screen can and cannot do:
+**Limits:**
 
 - DNS blocking stops most tracking and ad *servers*. It cannot block data an app sends through
   its own servers, and some ads (YouTube's, for example) are served from the same addresses as
@@ -148,7 +154,8 @@ uses less memory. `tools/install.sh <tv-ip>` runs all four commands.
 | Left / Right | Move along the row |
 | OK | Open the selected app |
 | Hold OK | Tile options: move, change picture, remove |
-| Up | Corner buttons (all apps, settings) |
+| Up | Corner buttons (network, VPN, all apps, settings) |
+| Down | All apps, if Settings → All apps → Down opens all apps is on |
 | Menu | All apps |
 | Back | Close the open panel |
 
@@ -163,6 +170,38 @@ Hush reads these folders under `/sdcard/Android/data/com.hushtv.launcher/files/`
 | `packs/<Pack name>/` | An icon pack as a folder of images named after each app's package |
 
 Files can be copied with `adb push` or from a USB drive using the TV's file manager.
+
+## Uninstalling
+
+1. If tracker blocking is on, set Settings → Privacy → **Don't block** first. Android keeps the
+   DNS setting after an app is removed.
+2. Remove Hush from the TV's Settings → Apps, or with `adb uninstall com.hushtv.launcher`.
+3. Press Home. The TV goes back to its own home screen. If you set Hush as the home screen over
+   adb, that choice is cleared automatically when Hush is removed.
+
+On Fire TV, run the disable command under [Fire TV](#fire-tv) before uninstalling.
+
+## FAQ
+
+**Is there more than one row?** No. Hush shows one row of the apps you choose; everything else
+is in the All apps drawer (Up, then the grid button).
+
+**Do I need a computer?** Only for tracker blocking (one command), for setting Hush as the home
+screen on TVs that don't offer a choice, and for the Fire TV Home button. Everything else works
+from the remote.
+
+**Does the TV switch back to its own home screen after a system update?** Usually not. If it
+does, press Home and choose Hush again, or run the `set-home-activity` command.
+
+**How do I update?** Download the newest `launcher.apk` and install it over the old one. Your
+settings are kept. [Obtainium](https://github.com/ImranR98/Obtainium) can check this page for
+updates automatically.
+
+**Will YouTube ads be blocked?** No. YouTube serves ads from the same addresses as videos, so no
+DNS-based blocker can remove them.
+
+**Where do I report a problem?** [Open an issue](https://github.com/hush-tv/HushLauncher/issues/new/choose)
+with your device model and Android version.
 
 ## Weather
 
@@ -190,16 +229,16 @@ tools/restore.sh <tv-ip> <backup-folder>
 Fire OS does not allow a different home screen, so Hush runs as a regular app there. To make the
 Home button open Hush, it includes an optional accessibility service that opens Hush whenever
 Amazon's home screen appears. It is notified only when that screen opens and cannot read
-screen content. Enable it over adb:
+screen content. Enable it over adb (any accessibility services you already use stay on):
 
 ```bash
-adb shell "settings put secure enabled_accessibility_services com.hushtv.launcher/com.hushtv.launcher.HomeRedirectService && settings put secure accessibility_enabled 1"
+adb shell 'S=com.hushtv.launcher/com.hushtv.launcher.HomeRedirectService; C=$(settings get secure enabled_accessibility_services); case "$C" in null|"") N=$S;; *$S*) N=$C;; *) N=$C:$S;; esac; settings put secure enabled_accessibility_services "$N"; settings put secure accessibility_enabled 1'
 ```
 
-To disable it:
+To disable it (other accessibility services you use are left on):
 
 ```bash
-adb shell "settings delete secure enabled_accessibility_services && settings put secure accessibility_enabled 0"
+adb shell 'S=com.hushtv.launcher/com.hushtv.launcher.HomeRedirectService; C=$(settings get secure enabled_accessibility_services); N=$(echo "$C" | sed "s#:$S##; s#$S:##; s#$S##"); if [ -z "$N" ]; then settings delete secure enabled_accessibility_services; else settings put secure enabled_accessibility_services "$N"; fi'
 ```
 
 Fire OS may turn the service off after a system update; run the first command again if that
@@ -240,6 +279,7 @@ only install over a copy signed with the same key.
 | `ClockDream.java` / `SaverView.java` | Screensaver |
 | `IconPacks.java` | Icon-pack support |
 | `Backup.java` | Backup and restore |
+| Other `*View.java` | Drawing helpers: glow, icons, thumbnails, screensaver preview |
 | `HomeRedirectService.java` | Fire TV Home button support |
 
 ## Licence

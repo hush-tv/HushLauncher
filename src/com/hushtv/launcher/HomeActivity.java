@@ -1094,22 +1094,30 @@ public final class HomeActivity extends Activity {
 
     /** Tracker blocking (Private DNS) and a shortcut to the TV's own ad settings. */
     private void buildPrivacyRows() {
-        settingsHint.setText("Hush itself collects nothing. These settings cut what the rest of the TV sends.");
+        settingsHint.setText("Hush itself collects nothing. With blocking on, the TV's address lookups go to the service you pick.");
+        if (!Privacy.supported()) {
+            settingsList.addView(row(-1, "Tracker blocking", "Needs Android 9 or newer", "", "dns0", null));
+        } else {
         final boolean allowed = Privacy.canChange(this);
         final int now = Privacy.current(this);
         for (int i = 0; i < Privacy.SERVICES.length; i++) {
             final int index = i;
             String[] svc = Privacy.SERVICES[i];
-            String sub = i == 0 ? svc[1] : svc[1] + ", for every app on the TV";
+            String title = i == 0 ? "Don't block" : (i == 3 ? "Block malware with " : "Block trackers with ") + svc[0];
+            String sub = svc[1];
             if (!allowed && i > 0) sub = "Needs one command from a computer first (see the guide)";
-            settingsList.addView(row(-1, i == 0 ? "Tracker blocking off" : (i == 3 ? "Block malware with " : "Block trackers with ") + svc[0], sub,
-                    index == now ? "\u2713" : "", "dns" + i, v -> {
-                        if (Privacy.set(this, index)) notice(index == 0 ? "Tracker blocking off" : "Blocking trackers with " + Privacy.SERVICES[index][0]);
-                        else notice("Run this from a computer first: " + Privacy.GRANT_COMMAND);
-                        buildSettingsList("dns" + index);
-                    }));
+            settingsList.addView(row(-1, title, sub, index == now ? "\u2713" : "", "dns" + i, v -> {
+                if (!Privacy.set(this, index, ok -> {
+                    if (ok) notice(index == 0 ? "Tracker blocking off"
+                            : (index == 3 ? "Blocking malware with " : "Blocking trackers with ") + Privacy.SERVICES[index][0]);
+                    else notice(Privacy.SERVICES[index][0] + " couldn't be reached here, so the TV's previous setting is back");
+                    if ("Privacy".equals(settingsPage) && settingsOption == null) buildSettingsList("dns" + index);
+                })) notice("Run this from a computer with adb first: " + Privacy.GRANT_COMMAND);
+                else if (index > 0) notice("Checking the connection\u2026");
+            }));
         }
         if (now == -1) settingsList.addView(row(-1, "Custom DNS in use", "Set outside Hush, left as it is", "\u2713", "dnsx", null));
+        }
         settingsList.addView(row(-1, "Ad personalisation", "Opens Google's ad settings, to reset or limit your ad ID",
                 "\u203A", "ads", v -> {
                     Intent ads = new Intent("com.google.android.gms.settings.ADS_PRIVACY");
