@@ -10,6 +10,8 @@ wallpaper and a clock.
 
 It is free, open source, about 3 MB, and has no account, analytics or advertising.
 
+**Install on your TV:** enter code **2573570** in the Downloader app.
+
 ![Home screen](preview/shots/home.png)
 
 | | |
@@ -125,8 +127,8 @@ https://github.com/hush-tv/HushLauncher/releases/latest/download/launcher.apk
 
 ### On the TV
 
-1. Install **Downloader** from your TV's app store.
-2. Enter the link above and install Hush when prompted. Allow installs from unknown sources if
+1. Install **Downloader** (by AFTVnews) from your TV's app store.
+2. Enter the code **2573570** and install Hush when prompted. (The code opens the link above.) Allow installs from unknown sources if
    asked.
 3. Press Home and choose Hush. If the TV does not ask, use the computer method below to set it
    as the home screen.
