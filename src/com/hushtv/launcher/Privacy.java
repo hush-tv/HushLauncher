@@ -35,6 +35,7 @@ final class Privacy {
             "adb shell pm grant com.hushtv.launcher android.permission.WRITE_SECURE_SETTINGS";
 
     private static final String MODE = "private_dns_mode", HOST = "private_dns_specifier";
+    private static final String CUSTOM = "dns_custom_host";
     private static final String PREV_MODE = "dns_prev_mode", PREV_HOST = "dns_prev_host", SAVED = "dns_saved";
 
     interface Result { void done(boolean ok); }
@@ -62,6 +63,46 @@ final class Privacy {
         return -1;
     }
 
+    /** The host the TV uses for Private DNS now, or null when it isn't set to a named host. */
+    static String currentHost(Context ctx) {
+        ContentResolver cr = ctx.getContentResolver();
+        if (!"hostname".equals(Settings.Global.getString(cr, MODE))) return null;
+        return Settings.Global.getString(cr, HOST);
+    }
+
+    /** The user's own DNS-over-TLS host, or null if none has been typed. */
+    static String customHost(Context ctx) {
+        return store(ctx).getString(CUSTOM, null);
+    }
+
+    static void setCustomHost(Context ctx, String host) {
+        store(ctx).edit().putString(CUSTOM, host).apply();
+    }
+
+    /** True when the TV uses the user's own host. */
+    static boolean customInUse(Context ctx) {
+        String host = currentHost(ctx), custom = customHost(ctx);
+        return host != null && custom != null && host.equalsIgnoreCase(custom);
+    }
+
+    /**
+     * Tidies a typed host: drops "https://" or "tls://" and anything from the first "/" on.
+     * Returns null unless what is left looks like a hostname: letters, digits, dots and hyphens,
+     * with at least one dot.
+     */
+    static String cleanHost(String typed) {
+        if (typed == null) return null;
+        String h = typed.trim().toLowerCase(java.util.Locale.ROOT);
+        int scheme = h.indexOf("://");
+        if (scheme >= 0) h = h.substring(scheme + 3);
+        int slash = h.indexOf('/');
+        if (slash >= 0) h = h.substring(0, slash);
+        while (h.endsWith(".")) h = h.substring(0, h.length() - 1);
+        if (h.length() > 253 || !h.contains(".") || !h.matches("[a-z0-9.-]+")
+                || h.startsWith(".") || h.startsWith("-") || h.contains("..")) return null;
+        return h;
+    }
+
     private static SharedPreferences store(Context ctx) {
         return ctx.getSharedPreferences("privacy", Context.MODE_PRIVATE);
     }
@@ -74,6 +115,11 @@ final class Privacy {
      * Returns false straight away if the change isn't allowed.
      */
     static boolean set(Context ctx, int index, Result result) {
+        return setHost(ctx, SERVICES[index][2], result);
+    }
+
+    /** As {@link #set}, for any DNS-over-TLS host; null switches blocking off. */
+    static boolean setHost(Context ctx, final String host, Result result) {
         if (!canChange(ctx)) return false;
         final int gen = ++generation;
         final Context app = ctx.getApplicationContext();
@@ -81,11 +127,11 @@ final class Privacy {
         final String oldMode = Settings.Global.getString(cr, MODE);
         final String oldHost = Settings.Global.getString(cr, HOST);
         SharedPreferences sp = store(app);
-        if (!sp.getBoolean(SAVED, false) && current(app) <= 0) {
+        if (!sp.getBoolean(SAVED, false) && current(app) <= 0 && !customInUse(app)) {
             sp.edit().putBoolean(SAVED, true).putString(PREV_MODE, oldMode).putString(PREV_HOST, oldHost).apply();
         }
         try {
-            if (SERVICES[index][2] == null) {
+            if (host == null) {
                 String mode = sp.getString(PREV_MODE, "opportunistic");
                 if (!"off".equals(mode) && !"opportunistic".equals(mode) && !"hostname".equals(mode)) mode = "opportunistic";
                 write(cr, mode, sp.getString(PREV_HOST, null));
@@ -93,11 +139,10 @@ final class Privacy {
                 result.done(true);
                 return true;
             }
-            write(cr, "hostname", SERVICES[index][2]);
+            write(cr, "hostname", host);
         } catch (SecurityException e) {
             return false;
         }
-        final String host = SERVICES[index][2];
         final Handler h = new Handler(Looper.getMainLooper());
         final long start = System.currentTimeMillis();
         h.postDelayed(new Runnable() {

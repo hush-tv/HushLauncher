@@ -64,6 +64,8 @@ final class Prefs {
             new Setting("All apps", "drawer_groups", "Group by type", 1, "Off", "On"),
             new Setting("System", "auto_update", "Check for updates", 1, "Off", "Once a day"),
             new Setting("System", "lite", "Lite mode", 0, "Off", "On"),
+            new Setting("System", "text_size", "Text size", 0, "Normal", "Large", "Extra large"),
+            new Setting("System", "contrast", "High contrast", 0, "Off", "On"),
     };
 
     private static final int[] ACCENTS = {0xFFFFFFFF, 0xFF76B900, 0xFF4C8DFF, 0xFFFFB020, 0xFFFF4D4D, 0xFFA070FF};
@@ -138,7 +140,12 @@ final class Prefs {
     static volatile int wallpaperAccent = 0xFFFFFFFF;
 
     boolean accentFromWallpaper() { return get("accent") >= ACCENTS.length; }
-    int accent() { return accentFromWallpaper() ? wallpaperAccent : ACCENTS[get("accent")]; }
+    int accent() { return highContrast() ? HIGH_CONTRAST_ACCENT : accentFromWallpaper() ? wallpaperAccent : ACCENTS[get("accent")]; }
+    /** Yellow used for every outline while High contrast is on. */
+    static final int HIGH_CONTRAST_ACCENT = 0xFFFFD400;
+    /** How much larger the launcher's words are drawn: Normal, Large, Extra large. */
+    float textScale() { return new float[]{1f, 1.25f, 1.5f}[get("text_size")]; }
+    boolean highContrast() { return get("contrast") == 1; }
     float clockScale() { return new float[]{0.80f, 1f, 1.28f}[get("clock_size")]; }
     boolean greeting() { return get("greeting") == 1; }
     boolean weather() { return get("weather") == 1; }

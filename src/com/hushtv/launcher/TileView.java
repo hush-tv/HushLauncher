@@ -72,14 +72,14 @@ final class TileView extends View {
         this.artW = artW;
         this.artH = artW * 9 / 16;
         this.labelMode = labelMode;
-        this.labelH = labelMode == 0 ? 0 : (int) (artH * 0.30f * labelScale);
+        this.labelH = labelMode == 0 ? 0 : (int) (artH * 0.30f * labelScale * Math.min(1.3f, prefs.textScale()));
         this.radius = artH * prefs.cornerFrac();
         this.artRect = new RectF(0, 0, artW, artH);
 
         cardPaint.setColor(0xFF15171B);
         dimPaint.setColor(prefs.dimAlpha() << 24);
         ringPaint.setStyle(Paint.Style.STROKE);
-        ringPaint.setStrokeWidth(Math.max(3f, artH * 0.024f));
+        ringPaint.setStrokeWidth(Math.max(3f, artH * (prefs.highContrast() ? 0.040f : 0.024f)));
         ringPaint.setColor(prefs.accent());
         textPaint.setColor(0xFFE6E8EC);
         textPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));

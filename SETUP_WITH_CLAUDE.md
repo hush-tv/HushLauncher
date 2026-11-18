@@ -57,7 +57,10 @@ settings other than the ones below.
    - Android TV / Google TV:
      `adb shell cmd package set-home-activity com.hushtv.launcher/.HomeActivity`
    - Fire TV (`adb shell getprop ro.product.manufacturer` returns `Amazon`), or if the command above
-     is not accepted, turn on Hush's Home button service while keeping any existing services:
+     is not accepted, or Home still opens the TV's own home screen afterwards (Nvidia Shield, and
+     Google TV devices such as Chromecast with Google TV, Google TV Streamer and Sony, TCL or
+     Philips Google TV sets), turn on Hush's Home button service while keeping any existing
+     services. It works with Amazon's, Google TV's and Android TV's home screens:
      ```bash
      adb shell 'S=com.hushtv.launcher/com.hushtv.launcher.HomeRedirectService; C=$(settings get secure enabled_accessibility_services); case "$C" in null|"") N=$S;; *$S*) N=$C;; *) N=$C:$S;; esac; settings put secure enabled_accessibility_services "$N"; settings put secure accessibility_enabled 1'
      ```

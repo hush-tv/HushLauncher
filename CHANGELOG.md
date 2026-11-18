@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.36
+
+- Tracker blocking with your own service (Settings → Privacy): type a DNS-over-TLS address such
+  as dns.nextdns.io. It is checked and switched back if it can't be reached, like the others.
+- Text size (Settings → System): Normal, Large or Extra large, for the clock, weather, settings,
+  messages and app names.
+- High contrast (Settings → System): settings and messages on solid black, white text, and a
+  thicker yellow outline on the selected tile or row.
+- On the home screen, the Previous track, Last channel or red button reopens the last app you
+  started from Hush. In kids mode, only if it is a kids' app.
+- The guides now say clearly that the Hush Home button works on Google TV devices and the Shield
+  as well as Fire TV, and explain setting up several TVs from a computer.
+
 ## 1.35
 
 - Kids mode (Settings → Kids mode): the home row shows only the apps you choose, all apps and tile

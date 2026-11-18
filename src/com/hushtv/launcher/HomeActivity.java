@@ -776,6 +776,53 @@ public final class HomeActivity extends Activity {
         applyLayoutSettings(false);
     }
 
+    /** Text size for headings and other already-large words: grows less, so they don't overflow. */
+    private float bigTextScale() {
+        return Math.min(1.25f, prefs.textScale());
+    }
+
+    /** Subtitle colour: dimmed normally, full white with High contrast. */
+    private int subColour() {
+        return prefs.highContrast() ? 0xFFFFFFFF : 0x99FFFFFF;
+    }
+
+    /** Applies Text size and High contrast to the words and panels that stay on screen. */
+    private void applyTextStyle() {
+        float ts = prefs.textScale(), big = bigTextScale();
+        boolean hc = prefs.highContrast();
+        if (weatherText != null) {
+            weatherText.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.058f * big);
+            weatherWords.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.024f * ts);
+            weatherRange.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.018f * ts);
+            weatherRange.setTextColor(hc ? 0xFFFFFFFF : 0xA6FFFFFF);
+            greetView.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.036f * big);
+            cornerLabel.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.019f * ts);
+        }
+        if (noticeView != null) {
+            noticeView.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.025f * ts);
+            noticeView.setBackground(cardBackground(screenH));
+        }
+        if (settingsTitle != null) {
+            settingsTitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.046f * big);
+            settingsHint.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.022f * ts);
+            settingsHint.setTextColor(subColour());
+            settingsScroll.setBackground(settingsBackground());
+        }
+    }
+
+    /** The settings panel's plate: a dark gradient, or solid black with High contrast. */
+    private GradientDrawable settingsBackground() {
+        GradientDrawable bg = new GradientDrawable();
+        // Solid: bright tiles showed faintly through anything less.
+        bg.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
+        if (prefs.highContrast()) bg.setColors(new int[]{0xFF000000, 0xFF000000});
+        else bg.setColors(new int[]{0xFF151921, 0xFF0A0C10});
+        bg.setStroke(Math.max(1, (int) (screenH * 0.0014f)), prefs.highContrast() ? 0x66FFFFFF : 0x1FFFFFFF);
+        float r = screenH * 0.03f;
+        bg.setCornerRadii(new float[]{r, r, 0, 0, 0, 0, r, r});
+        return bg;
+    }
+
     private int rowGeneration;
 
     /**
@@ -789,7 +836,7 @@ public final class HomeActivity extends Activity {
         int headroom = (int) (tileH * 0.30f); // room for the selected tile to grow without clipping
         row.setPadding(pad, headroom, pad, headroom);
         FrameLayout.LayoutParams rowLp = (FrameLayout.LayoutParams) rowScroll.getLayoutParams();
-        int labelH = prefs.labelMode() == 0 ? 0 : (int) (tileH * 0.30f);
+        int labelH = prefs.labelMode() == 0 ? 0 : (int) (tileH * 0.30f * Math.min(1.3f, prefs.textScale()));
         int lowest = screenH - (int) (screenH * 0.04f) - labelH - (int) (tileH * (1f + (prefs.zoom() - 1f) / 2f));
         rowLp.topMargin = Math.min((int) (screenH * prefs.rowTopFrac()), lowest) - headroom;
         rowScroll.setLayoutParams(rowLp);
@@ -806,8 +853,10 @@ public final class HomeActivity extends Activity {
         // While settings are open, a right-hand clock sits just left of the panel instead of under it.
         clockLp.rightMargin = pad + (overlay == SETTINGS ? (int) (screenW * PANEL) : 0);
         topBar.setLayoutParams(clockLp);
-        clockView.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.068f * prefs.clockScale());
-        dateView.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.018f * Math.min(1.15f, prefs.clockScale()));
+        // Large text grows the big clock less, so it still fits beside the weather.
+        clockView.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.068f * prefs.clockScale() * bigTextScale());
+        dateView.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.018f * Math.min(1.15f, prefs.clockScale()) * prefs.textScale());
+        applyTextStyle();
         // The greeting takes the top corner the clock isn't using.
         FrameLayout.LayoutParams greetLp = (FrameLayout.LayoutParams) cornerBox.getLayoutParams();
         greetLp.gravity = Gravity.TOP | (left ? Gravity.END : Gravity.START);
@@ -883,6 +932,8 @@ public final class HomeActivity extends Activity {
     private static final float PANEL = 0.36f;
 
     /** A panel on the right; the home screen stays visible beside it so changes preview live. */
+    private ScrollView settingsScroll;
+
     private View buildSettings() {
         settings = new FrameLayout(this);
         settings.setVisibility(View.GONE);
@@ -893,21 +944,15 @@ public final class HomeActivity extends Activity {
         settingsTitle = text(screenH * 0.046f, 0xFFFFFFFF, "sans-serif-light");
         settingsTitle.setPadding((int) (screenW * 0.010f), 0, 0, 0);
         column.addView(settingsTitle);
-        settingsHint = text(screenH * 0.022f, 0x99FFFFFF, "sans-serif");
+        settingsHint = text(screenH * 0.022f, subColour(), "sans-serif");
         settingsHint.setPadding((int) (screenW * 0.010f), (int) (screenH * 0.010f), 0, (int) (screenH * 0.028f));
         column.addView(settingsHint);
         settingsList = new LinearLayout(this);
         settingsList.setOrientation(LinearLayout.VERTICAL);
         column.addView(settingsList);
         ScrollView scroll = panelScroll(column);
-        GradientDrawable bg = new GradientDrawable();
-        // Solid: bright tiles showed faintly through anything less.
-        bg.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
-        bg.setColors(new int[]{0xFF151921, 0xFF0A0C10});
-        bg.setStroke(Math.max(1, (int) (screenH * 0.0014f)), 0x1FFFFFFF);
-        float r = screenH * 0.03f;
-        bg.setCornerRadii(new float[]{r, r, 0, 0, 0, 0, r, r});
-        scroll.setBackground(bg);
+        settingsScroll = scroll;
+        scroll.setBackground(settingsBackground());
         settings.addView(scroll, new FrameLayout.LayoutParams((int) (screenW * PANEL),
                 ViewGroup.LayoutParams.MATCH_PARENT, Gravity.END));
         return settings;
@@ -943,7 +988,7 @@ public final class HomeActivity extends Activity {
             {"All apps", "The app drawer", IconView.APPS},
             {"Privacy", "Tracker blocking and ad settings", IconView.VPN},
             {"Kids mode", "Only chosen apps, settings behind a PIN", IconView.APPS},
-            {"System", "Android settings, start-up app, backup, reset", IconView.GEAR},
+            {"System", "Android settings, text size, start-up app, backup, reset", IconView.GEAR},
     };
 
     /**
@@ -1199,17 +1244,20 @@ public final class HomeActivity extends Activity {
         }
         LinearLayout words = new LinearLayout(this);
         words.setOrientation(LinearLayout.VERTICAL);
-        final TextView name = text(screenH * 0.030f, 0xFFD6D9DE, "sans-serif");
+        final float ts = prefs.textScale();
+        final boolean hc = prefs.highContrast();
+        final int nameColour = hc ? 0xFFFFFFFF : 0xFFD6D9DE;
+        final TextView name = text(screenH * 0.030f * ts, nameColour, "sans-serif");
         name.setText(title);
         words.addView(name);
         if (sub != null) {
-            TextView second = text(screenH * 0.021f, 0x99FFFFFF, "sans-serif");
+            TextView second = text(screenH * 0.021f * ts, subColour(), "sans-serif");
             second.setText(sub);
             second.setPadding(0, (int) (screenH * 0.006f), 0, 0);
             words.addView(second);
         }
         r.addView(words, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        final TextView right = text(screenH * 0.026f, 0xB3FFFFFF, "sans-serif-medium");
+        final TextView right = text(screenH * 0.026f * ts, hc ? 0xFFFFFFFF : 0xB3FFFFFF, "sans-serif-medium");
         right.setText(value);
         right.setPadding((int) (screenW * 0.008f), 0, 0, 0);
         right.setId(android.R.id.text2);
@@ -1217,8 +1265,8 @@ public final class HomeActivity extends Activity {
         final android.graphics.drawable.Drawable focused = focusPlate();
         r.setOnFocusChangeListener((v, has) -> {
             r.setBackground(has ? focused : null);
-            name.setTextColor(has ? 0xFFFFFFFF : 0xFFD6D9DE);
-            right.setTextColor(has ? 0xFFFFFFFF : 0xB3FFFFFF);
+            name.setTextColor(has ? 0xFFFFFFFF : nameColour);
+            right.setTextColor(has || hc ? 0xFFFFFFFF : 0xB3FFFFFF);
         });
         if (onClick != null) r.setOnClickListener(onClick);
         return r;
@@ -1229,7 +1277,8 @@ public final class HomeActivity extends Activity {
         GradientDrawable plate = new GradientDrawable();
         plate.setCornerRadius(screenH * 0.016f);
         plate.setColor(0xFF262B34);
-        plate.setStroke(Math.max(1, (int) (screenH * 0.0014f)), 0x24FFFFFF);
+        if (prefs.highContrast()) plate.setStroke(Math.max(3, (int) (screenH * 0.004f)), Prefs.HIGH_CONTRAST_ACCENT);
+        else plate.setStroke(Math.max(1, (int) (screenH * 0.0014f)), 0x24FFFFFF);
         GradientDrawable bar = new GradientDrawable();
         bar.setCornerRadius(screenH);
         bar.setColor(prefs.accent());
@@ -1407,7 +1456,15 @@ public final class HomeActivity extends Activity {
                 else if (index > 0) notice("Checking the connection\u2026");
             }));
         }
-        if (now == -1) settingsList.addView(row(-1, "Custom DNS in use", "Set outside Hush, left as it is", "\u2713", "dnsx", null));
+        if (allowed) {
+            final String custom = Privacy.customHost(this);
+            final boolean customOn = Privacy.customInUse(this);
+            settingsList.addView(row(-1, "Block trackers with your own service",
+                    custom == null ? "Type a DNS-over-TLS address, like dns.nextdns.io" : custom,
+                    customOn ? "\u2713" : "\u203A", "dns_custom", v -> askDnsHost(custom)));
+        }
+        if (now == -1 && !Privacy.customInUse(this))
+            settingsList.addView(row(-1, "Custom DNS in use", "Set outside Hush, left as it is", "\u2713", "dnsx", null));
         }
         settingsList.addView(row(-1, "Ad personalisation", "Opens Google's ad settings, to reset or limit your ad ID",
                 "\u203A", "ads", v -> {
@@ -1428,6 +1485,29 @@ public final class HomeActivity extends Activity {
                 }));
     }
 
+    /** Asks for the user's own Private DNS host, then switches to it like the listed services. */
+    private void askDnsHost(String initial) {
+        askText("Your own service", "Type its DNS-over-TLS address, like dns.nextdns.io or family.adguard-dns.com,"
+                        + " then press done. Back cancels.", "Address", initial,
+                android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI, 253, typed -> {
+                    if (typed.trim().isEmpty()) return;
+                    final String host = Privacy.cleanHost(typed);
+                    if (host == null) {
+                        notice("That doesn't look like an address. Use letters, numbers, dots and hyphens, like dns.nextdns.io");
+                        return;
+                    }
+                    boolean trimmed = !host.equals(typed.trim().toLowerCase(java.util.Locale.ROOT));
+                    Privacy.setCustomHost(this, host);
+                    if (!Privacy.setHost(this, host, ok -> {
+                        if (ok) notice("Blocking trackers with " + host);
+                        else notice(host + " couldn't be reached here, so the TV's previous setting is back");
+                        if ("Privacy".equals(settingsPage) && settingsOption == null) buildSettingsList("dns_custom");
+                    })) notice("Run this from a computer with adb first: " + Privacy.GRANT_COMMAND);
+                    else notice((trimmed ? "Using just " + host + ". " : "") + "Checking the connection\u2026");
+                    if ("Privacy".equals(settingsPage) && settingsOption == null) buildSettingsList("dns_custom");
+                });
+    }
+
     /** Applies a changed setting to the home screen straight away. */
     private void settingChanged(Prefs.Setting s) {
         if (s.key.equals("lite")) {
@@ -1441,6 +1521,9 @@ public final class HomeActivity extends Activity {
         if (s.key.equals("sky") || s.key.equals("weather") || s.key.equals("stars")) updateStars();
         // Bigger tiles than the artwork was loaded for: load it again at the new size.
         if (neededArtWidth() > apps.artWidth()) loadApps(false);
+        // The settings rows themselves change size or colour: draw them again.
+        if ((s.key.equals("text_size") || s.key.equals("contrast")) && overlay == SETTINGS && settingsOption == null)
+            buildSettingsList(s.key);
     }
 
     /** A setting: OK opens its list of choices, left and right step through them in place. */
@@ -2195,8 +2278,8 @@ public final class HomeActivity extends Activity {
     private GradientDrawable cardBackground(float radius) {
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(radius);
-        bg.setColor(0xF2171A20);
-        bg.setStroke(Math.max(1, (int) (screenH * 0.0014f)), 0x2EFFFFFF);
+        bg.setColor(prefs.highContrast() ? 0xFF000000 : 0xF2171A20);
+        bg.setStroke(Math.max(1, (int) (screenH * 0.0014f)), prefs.highContrast() ? 0x66FFFFFF : 0x2EFFFFFF);
         return bg;
     }
 
@@ -2778,6 +2861,10 @@ public final class HomeActivity extends Activity {
                         || code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_MENU;
                 if (ours) return true;
             }
+            if (overlay == NONE && moving == null && lastAppKey(code)) {
+                if (e.getRepeatCount() == 0) reopenLastApp();
+                return true;
+            }
             boolean onCorner = iconBox.hasFocus();
             if (overlay == NONE && onCorner) {
                 // On the corner buttons: left and right move between them, Down or Back returns
@@ -2864,7 +2951,30 @@ public final class HomeActivity extends Activity {
         Intent i = new Intent(Intent.ACTION_MAIN);
         i.setComponent(app.component);
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+        getSharedPreferences("home", MODE_PRIVATE).edit().putString("last_app", app.pkg).apply();
         startSafely(i);
+    }
+
+    /** True for the remote buttons that reopen the last app: previous track, last channel, red. */
+    private static boolean lastAppKey(int code) {
+        return code == KeyEvent.KEYCODE_MEDIA_PREVIOUS || code == KeyEvent.KEYCODE_LAST_CHANNEL
+                || code == KeyEvent.KEYCODE_PROG_RED;
+    }
+
+    /** Opens the app last started from Hush again (in kids mode, only if it is a kids' app). */
+    private void reopenLastApp() {
+        String pkg = getSharedPreferences("home", MODE_PRIVATE).getString("last_app", null);
+        if (pkg == null) {
+            notice("Open an app from Hush first");
+            return;
+        }
+        if (!apps.kidsAllow(pkg)) return;
+        for (Apps.App a : all) {
+            if (pkg.equals(a.pkg) && a.component != null) {
+                launch(a);
+                return;
+            }
+        }
     }
 
     /**

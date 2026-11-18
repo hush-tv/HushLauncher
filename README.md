@@ -58,7 +58,14 @@ the download link on GitHub.
 
 **Privacy**
 - Tracker blocking for the whole TV (needs one command from a computer, see below).
+- Or your own DNS-over-TLS service, such as NextDNS or AdGuard's family filter.
 - Shortcuts to the TV's ad-personalisation and usage-data settings.
+
+**Easier to see**
+- Settings → System → **Text size** (Normal, Large, Extra large) enlarges the clock, date,
+  weather, settings, messages and app names.
+- Settings → System → **High contrast** puts settings and messages on solid black with full-white
+  text, and draws a thicker yellow outline around the selected tile or row.
 
 **Everything else**
 - All apps drawer (5, 6 or 7 columns) with your home-row apps first, then the rest under Watch,
@@ -88,6 +95,12 @@ video itself (YouTube, Prime Video, live TV).
 | **AdGuard** (recommended) | The most ads and trackers | You're not sure: start here |
 | Mullvad | Ads and trackers | You'd rather trust a no-logs VPN company |
 | Quad9 | Scam and malware sites only | An app or login breaks with the others |
+
+**Your own service:** choose **Block trackers with your own service** and type its
+DNS-over-TLS address, for example `dns.nextdns.io` (or your personal NextDNS address) or
+`family.adguard-dns.com`. Type just the address: if you paste `https://` or a path after a `/`,
+Hush keeps only the address part and says so. It is checked and switched back in the same way
+as the listed services if it can't be reached.
 
 Only one can be on at a time; that's how Android's Private DNS works. The service you choose
 sees which sites your TV looks up. All three publish no-logging policies.
@@ -125,8 +138,8 @@ the same job for every device at home: in its settings, set the DNS servers to A
 | Device | Status |
 |---|---|
 | Nvidia Shield TV (all models) | Fully tested |
-| Chromecast with Google TV, Google TV Streamer, onn, Xiaomi Mi Box | Supported |
-| TVs with Android TV or Google TV built in | Supported |
+| Chromecast with Google TV, Google TV Streamer, onn, Xiaomi Mi Box | Supported; if the TV has no home-screen setting, the Home button works through the [Hush Home button](#home-button-on-fire-tv-and-google-tv) service |
+| TVs with Android TV or Google TV built in (Sony, TCL, Philips and others) | Supported; Home button as above where needed |
 | Amazon Fire TV and Fire TV Stick (Fire OS) | Supported; Home button through the [Hush Home button](#home-button-on-fire-tv-and-google-tv) service. An Amazon update may switch that service off; turn it on again in Accessibility |
 | Newer Fire TV devices on Vega OS | Not supported: Vega OS is not Android |
 | Android TV boxes (Formuler, Dynalink, Homatics and others) | Supported |
@@ -223,6 +236,7 @@ blocking. `tools/install.sh <tv-ip>` runs the first four.
 | Menu | All apps |
 | Up / Down in all apps | The tile above or below, even in a shorter row; group titles are skipped |
 | Back | Close the open panel |
+| Previous track, Last channel or red button | Reopen the last app you started from Hush (on the home screen; in kids mode only if it is a kids' app) |
 
 ## Customisation
 
@@ -319,10 +333,49 @@ tools/backup.sh <tv-ip>
 tools/restore.sh <tv-ip> <backup-folder>
 ```
 
+## Setting up several TVs (or a relative's TV) from a computer
+
+Set up one TV the way you like it, then copy that setup to others with `adb` (see
+[From a computer, by hand](#from-a-computer-by-hand) for turning on debugging):
+
+```bash
+tools/backup.sh <first-tv-ip>                       # saves to extras/backups/<date>/
+tools/restore.sh <other-tv-ip> extras/backups/<date>
+```
+
+`backup.sh` asks Hush to save its settings, then copies `backup/` (the settings file),
+`wallpapers/` and `tiles/` from `/sdcard/Android/data/com.hushtv.launcher/files/` to the computer.
+`restore.sh` pushes those folders back to the same place and asks Hush to apply them. Hush
+restarts once the settings are in. Picture paths are adjusted to the new TV.
+
+On Android 11 and newer, `adb push` into another app's data folder may be refused. Use the
+import broadcast instead: push the pictures to `/sdcard/Download/hush/` first, then send the
+settings file itself in the broadcast, base64-encoded:
+
+```bash
+adb push extras/backups/<date>/wallpapers /sdcard/Download/hush/wallpapers
+adb push extras/backups/<date>/tiles /sdcard/Download/hush/tiles
+adb push <icon-pack-folders> /sdcard/Download/hush/packs     # only if you use image-folder packs
+adb shell am broadcast -n com.hushtv.launcher/.BackupReceiver -a com.hushtv.launcher.IMPORT \
+  --es from /sdcard/Download/hush \
+  --es json_b64 "$(base64 < extras/backups/<date>/backup/launcher-backup.json | tr -d '\n')"
+```
+
+Hush copies `packs/`, `tiles/` and `wallpapers/` from the `from` folder (any that are missing
+are skipped), checks the settings are a Hush backup, then restores them and restarts. If the
+settings are damaged, the TV's previous backup is kept. The broadcast answers `result=1` when it
+worked and `result=2` when it didn't.
+
+The receiver only accepts broadcasts from adb (it needs Android's DUMP permission), so other apps
+on the TV can't use it. The kids mode PIN is never copied: set it again on each TV.
+
 ## Home button on Fire TV and Google TV
 
-Some TVs don't let you pick a different home screen: Fire TV, and many Google TV devices. On
-those, Hush includes an optional **Hush Home button** service that opens Hush whenever the
+Some TVs don't let you pick a different home screen, or keep opening their own one: Fire TV,
+Nvidia Shield, and many Google TV devices (Chromecast with Google TV, Google TV Streamer, and
+Sony, TCL and Philips Google TV sets). The service watches for Amazon's home screen
+(`com.amazon.tv.launcher`), the Google TV home screen (`com.google.android.apps.tv.launcherx`)
+and the Android TV home screen (`com.google.android.tvlauncher`). On those, Hush includes an optional **Hush Home button** service that opens Hush whenever the
 built-in home screen appears, so the Home button lands on Hush. It is only told when the
 built-in home screen opens and cannot read anything on screen.
 
