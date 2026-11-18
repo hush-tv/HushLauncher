@@ -217,7 +217,7 @@ blocking. `tools/install.sh <tv-ip>` runs the first four.
 |---|---|
 | Left / Right | Move along the row |
 | OK | Open the selected app |
-| Hold OK | Tile options: move, change picture, remove |
+| Hold OK | Tile options: move, change picture, rename, hide (in all apps), remove |
 | Up | Corner buttons (network, VPN, all apps, settings) |
 | Down | All apps, if Settings → All apps → Down opens all apps is on |
 | Menu | All apps |
@@ -235,6 +235,18 @@ Hush reads these folders under `/sdcard/Android/data/com.hushtv.launcher/files/`
 | `packs/<Pack name>/` | An icon pack as a folder of images named after each app's package |
 
 Files can be copied with `adb push` or from a USB drive using the TV's file manager.
+
+To rename an app, hold OK on its tile and choose Rename; leave the name empty to put its own back.
+To hide an app, hold OK on it in all apps and choose Hide. Hidden apps are listed in
+Settings → All apps → Hidden apps, where OK shows one again.
+
+## Kids mode
+
+Settings → Kids mode shows only the apps you choose on the home row. All apps, tile options and
+other apps can't be opened, and Settings asks for a 4-number PIN (three wrong tries means a
+30-second wait). Choose the apps under Kids' apps, then turn Kids mode on; the first time, you
+set the PIN. Turning it off needs the PIN too. The PIN is stored only as a salted hash and is
+never included in backups.
 
 ## Getting back to the normal home screen
 
@@ -342,6 +354,10 @@ work per frame.
 The first draw after the TV starts makes the graphics driver hold about 50 MB it does not
 release. Hush clears this by restarting itself once while hidden behind another app, at most
 twice per boot.
+
+Settings → System → Lite mode switches off weather effects, stars, shine, glow, wallpaper blur and
+rotation, uses fast animations and skips drawing panels ahead of time. It starts on by itself on
+low-memory TVs.
 
 ## Building from source
 

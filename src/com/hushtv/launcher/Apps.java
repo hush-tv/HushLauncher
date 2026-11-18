@@ -175,6 +175,8 @@ final class Apps {
                     // One app with broken artwork must not take the home screen down with it:
                     // it still gets a tile, drawn from whatever did load.
                 }
+                String renamed = label(app.pkg);
+                if (renamed != null) app.label = renamed;
                 byPkg.put(app.pkg, app);
                 // Each app's full-size banner is finished with once it has been drawn small, but
                 // Android only clears such leftovers when this app's own small heap fills, which
@@ -285,9 +287,106 @@ final class Apps {
         prefs.edit().putString(KEY_HOME, TextUtils.join(",", pkgs)).apply();
     }
 
-    /** Home row apps in order, skipping anything not installed. */
+    // ------------------------------------------------------------ names, hidden apps, kids mode
+
+    static final String LABEL_PREFIX = "label_", HIDDEN_APPS = "hidden_apps", KIDS_ON = "kids_on",
+            KIDS_APPS = "kids_apps", KIDS_PIN_HASH = "kids_pin_hash", KIDS_PIN_SALT = "kids_pin_salt";
+
+    /** The name the owner gave this app, or null for its own. */
+    String label(String pkg) {
+        String v = str(LABEL_PREFIX + pkg, null);
+        return v == null || v.trim().isEmpty() ? null : v;
+    }
+
+    /** Renames an app; an empty name puts its own back. */
+    void setLabel(String pkg, String name) {
+        if (name == null || name.trim().isEmpty()) prefs.edit().remove(LABEL_PREFIX + pkg).apply();
+        else prefs.edit().putString(LABEL_PREFIX + pkg, name.trim()).apply();
+    }
+
+    private List<String> list(String key) {
+        List<String> out = new ArrayList<>();
+        String saved = str(key, null);
+        if (saved != null) for (String s : saved.split(",")) if (!s.isEmpty() && !out.contains(s)) out.add(s);
+        return out;
+    }
+
+    List<String> hiddenApps() { return list(HIDDEN_APPS); }
+
+    boolean isHidden(String pkg) { return hiddenApps().contains(pkg); }
+
+    void setHidden(String pkg, boolean hide) {
+        List<String> h = hiddenApps();
+        h.remove(pkg);
+        if (hide) h.add(pkg);
+        prefs.edit().putString(HIDDEN_APPS, TextUtils.join(",", h)).apply();
+    }
+
+    /** The apps not hidden. */
+    List<App> visible(List<App> all) {
+        List<String> h = hiddenApps();
+        List<App> out = new ArrayList<>();
+        for (App a : all) if (!h.contains(a.pkg)) out.add(a);
+        return out;
+    }
+
+    List<String> kidsApps() { return list(KIDS_APPS); }
+
+    void setKidsApps(List<String> pkgs) {
+        prefs.edit().putString(KIDS_APPS, TextUtils.join(",", pkgs)).apply();
+    }
+
+    /** On only while a PIN is set too, so a restored backup can never lock anyone out. */
+    boolean kidsOn() {
+        boolean on;
+        try { on = prefs.getBoolean(KIDS_ON, false); } catch (ClassCastException e) { on = false; }
+        return on && hasPin();
+    }
+
+    void setKidsOn(boolean on) { prefs.edit().putBoolean(KIDS_ON, on).apply(); }
+
+    /** Whether Hush may open this app now. */
+    boolean kidsAllow(String pkg) { return !kidsOn() || kidsApps().contains(pkg); }
+
+    boolean hasPin() { return str(KIDS_PIN_HASH, null) != null && str(KIDS_PIN_SALT, null) != null; }
+
+    void setPin(String pin) {
+        byte[] salt = new byte[16];
+        new java.security.SecureRandom().nextBytes(salt);
+        String s = hex(salt);
+        prefs.edit().putString(KIDS_PIN_SALT, s).putString(KIDS_PIN_HASH, hash(s, pin)).apply();
+    }
+
+    boolean checkPin(String pin) {
+        String salt = str(KIDS_PIN_SALT, null), want = str(KIDS_PIN_HASH, null);
+        return salt != null && want != null && pin != null
+                && java.security.MessageDigest.isEqual(want.getBytes(), hash(salt, pin).getBytes());
+    }
+
+    private static String hash(String salt, String pin) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            md.update(salt.getBytes("UTF-8"));
+            return hex(md.digest(pin.getBytes("UTF-8")));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static String hex(byte[] b) {
+        StringBuilder sb = new StringBuilder();
+        for (byte x : b) sb.append(String.format(java.util.Locale.ROOT, "%02x", x));
+        return sb.toString();
+    }
+
+    /** Home row apps in order, skipping anything not installed or hidden. In kids mode, the kids' apps. */
     List<App> homeApps(List<App> all) {
         List<App> out = new ArrayList<>();
+        if (kidsOn()) {
+            for (String pkg : kidsApps()) for (App a : all) if (a.pkg.equals(pkg)) { out.add(a); break; }
+            return out;
+        }
+        all = visible(all);
         boolean chosen = str(KEY_HOME, null) != null;
         for (String pkg : homePackages()) {
             for (App a : all) {

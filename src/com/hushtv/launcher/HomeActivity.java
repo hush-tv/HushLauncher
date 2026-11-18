@@ -94,6 +94,14 @@ public final class HomeActivity extends Activity {
     private Prefs.Setting settingsOption;
     /** True while the settings panel is showing the list of apps to open at start-up. */
     private boolean settingsBootPick;
+    /** 1 = choosing the kids' apps, 2 = the hidden apps list; 0 = neither. */
+    private int settingsAppPick;
+    /** Settings were opened with the kids mode PIN; forgotten once they close. */
+    private boolean kidsUnlocked;
+    private int pinTries;
+    private long pinLockedUntil;
+    /** Shown in place of the row in kids mode when no apps are chosen yet. */
+    private TextView kidsEmpty;
     /** Set after the first press on "Restore settings"; the second press does it. */
     private boolean restoreArmed;
     /** Likewise for "Reset launcher settings". */
@@ -388,7 +396,7 @@ public final class HomeActivity extends Activity {
     /** Opens the app chosen in Settings, System, "Open at start-up", once per start of the TV. */
     private void openBootApp() {
         final String pkg = apps.bootApp();
-        if (pkg == null || isDemo()) return;
+        if (pkg == null || isDemo() || !apps.kidsAllow(pkg)) return;
         // A short wait lets the home screen appear first, so Back from the app lands somewhere tidy.
         row.postDelayed(() -> {
             if (!resumed || overlay != NONE || menuOpen || isDestroyed()) return;
@@ -722,6 +730,12 @@ public final class HomeActivity extends Activity {
         rowScroll.addView(row);
         root.addView(rowScroll, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+        kidsEmpty = text(screenH * 0.030f, 0xE6FFFFFF, "sans-serif-light");
+        kidsEmpty.setText("Ask a grown-up to choose apps in Settings \u2192 Kids mode");
+        kidsEmpty.setShadowLayer(screenH * 0.01f, 0, 0, 0xCC000000);
+        kidsEmpty.setVisibility(View.GONE);
+        root.addView(kidsEmpty, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
 
         root.addView(buildDrawer(), match());
         root.addView(buildSettings(), match());
@@ -928,6 +942,7 @@ public final class HomeActivity extends Activity {
             {"Screensaver", "Pictures, clock, timing and preview", IconView.MOON},
             {"All apps", "The app drawer", IconView.APPS},
             {"Privacy", "Tracker blocking and ad settings", IconView.VPN},
+            {"Kids mode", "Only chosen apps, settings behind a PIN", IconView.APPS},
             {"System", "Android settings, start-up app, backup, reset", IconView.GEAR},
     };
 
@@ -961,6 +976,10 @@ public final class HomeActivity extends Activity {
                         "boot:" + app.pkg, v -> pickBootApp(app.pkg)));
             }
             focusTagged(focusTag != null ? focusTag : "boot:" + (current == null ? "" : current));
+            return;
+        }
+        if (settingsAppPick != 0) {
+            buildAppPick(focusTag);
             return;
         }
         if (settingsOption != null) {
@@ -1025,6 +1044,14 @@ public final class HomeActivity extends Activity {
         }
         if (settingsPage.equals("Tiles")) settingsList.addView(iconPackRow());
         if (settingsPage.equals("Privacy")) buildPrivacyRows();
+        if (settingsPage.equals("Kids mode")) buildKidsRows();
+        if (settingsPage.equals("All apps")) {
+            settingsList.addView(row(-1, "Hidden apps (" + apps.hiddenApps().size() + ")",
+                    "Select one to show it again", "\u203A", "hidden", v -> {
+                        settingsAppPick = 2;
+                        buildSettingsList(null);
+                    }));
+        }
         if (settingsPage.equals("Get started")) buildSetupRows();
         if (settingsPage.equals("System")) {
             settingsList.addView(updateRow());
@@ -1097,6 +1124,7 @@ public final class HomeActivity extends Activity {
     private void pickBootApp(String pkg) {
         apps.setBootApp(pkg);
         settingsBootPick = false;
+        settingsAppPick = 0;
         buildSettingsList("boot");
     }
 
@@ -1402,7 +1430,11 @@ public final class HomeActivity extends Activity {
 
     /** Applies a changed setting to the home screen straight away. */
     private void settingChanged(Prefs.Setting s) {
-        if (s.key.equals("wp_dim") || s.key.equals("wp_blur") || s.key.equals("night_dim")
+        if (s.key.equals("lite")) {
+            applyWallpaper();
+            applyLayoutSettings(true);
+            updateStars();
+        } else if (s.key.equals("wp_dim") || s.key.equals("wp_blur") || s.key.equals("night_dim")
                 || s.key.equals("wp_auto")) applyWallpaper();
         else applyLayoutSettings(true);
         if (s.key.equals("weather")) refreshWeather();
@@ -1654,6 +1686,13 @@ public final class HomeActivity extends Activity {
             lp.rightMargin = gap;
             row.addView(tile, lp);
         }
+        boolean emptyKids = tiles.isEmpty() && apps.kidsOn();
+        kidsEmpty.setVisibility(emptyKids ? View.VISIBLE : View.GONE);
+        if (emptyKids) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) kidsEmpty.getLayoutParams();
+            lp.topMargin = (int) (screenH * prefs.rowTopFrac());
+            kidsEmpty.setLayoutParams(lp);
+        }
         if (overlay == NONE) focusRow();
         queueDrawerPrebuild();
     }
@@ -1668,7 +1707,7 @@ public final class HomeActivity extends Activity {
         row.postDelayed(() -> android.os.Looper.myQueue().addIdleHandler(() -> {
             prebuildQueued = false;
             if (drawerDirty && overlay == NONE && !menuOpen && moving == null && !all.isEmpty()
-                    && !isDestroyed()) {
+                    && !isDestroyed() && !prefs.lite() && !apps.kidsOn()) {
                 buildDrawerGrid();
                 // Drawing the panels early costs memory a low-memory TV would rather keep.
                 if (!((android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE)).isLowRamDevice()) warmUp();
@@ -1705,6 +1744,7 @@ public final class HomeActivity extends Activity {
         settingsPage = null;
         settingsOption = null;
         settingsBootPick = false;
+        settingsAppPick = 0;
         settingsGallery = 0;
         buildSettingsList(null);
         settings.setAlpha(0.01f);
@@ -1926,9 +1966,10 @@ public final class HomeActivity extends Activity {
         drawerDirty = false;
         // The apps on the home row, in the row's order, then everything else by name: under Watch,
         // Listen, Play and Apps and tools if grouping is on, otherwise in one list.
-        List<Apps.App> home = apps.homeApps(all), rest = new ArrayList<>(all);
+        List<Apps.App> shown = apps.visible(all);
+        List<Apps.App> home = apps.homeApps(all), rest = new ArrayList<>(shown);
         rest.removeAll(home);
-        drawerCount.setText(all.size() + " apps  \u00B7  " + home.size() + " on the home row");
+        drawerCount.setText(shown.size() + " apps  \u00B7  " + home.size() + " on the home row");
         List<List<Apps.App>> lists = new ArrayList<>();
         List<String> names = new ArrayList<>();
         lists.add(home);
@@ -2180,6 +2221,21 @@ public final class HomeActivity extends Activity {
 
     /** Asks for the town with the TV's on-screen keyboard. */
     private void askWeatherPlace() {
+        askText("Weather town", "Type a town or city, then press the keyboard's done key. Back cancels.",
+                "Town or city", weather.place(), android.text.InputType.TYPE_CLASS_TEXT
+                        | android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS, 0, this::setWeatherPlace);
+    }
+
+    interface TextAnswer {
+        void accept(String text);
+    }
+
+    /**
+     * Asks for a line of text with the TV's on-screen keyboard; {@code then} gets it when the
+     * keyboard's done key is pressed. {@code maxLength} 0 = no limit.
+     */
+    private void askText(String heading, String help, String boxHint, String initial, int inputType,
+                         int maxLength, final TextAnswer then) {
         final android.app.Dialog dialog = new android.app.Dialog(this,
                 android.R.style.Theme_Translucent_NoTitleBar_Fullscreen);
         FrameLayout back = new FrameLayout(this);
@@ -2192,22 +2248,22 @@ public final class HomeActivity extends Activity {
         card.setElevation(screenH * 0.03f);
 
         TextView title = text(screenH * 0.038f, 0xFFFFFFFF, "sans-serif-light");
-        title.setText("Weather town");
+        title.setText(heading);
         card.addView(title);
         TextView hint = text(screenH * 0.021f, 0x99FFFFFF, "sans-serif");
-        hint.setText("Type a town or city, then press the keyboard's done key. Back cancels.");
+        hint.setText(help);
         hint.setPadding(0, (int) (screenH * 0.008f), 0, (int) (screenH * 0.024f));
         card.addView(hint);
 
         final android.widget.EditText box = new android.widget.EditText(this);
         box.setSingleLine(true);
-        box.setHint("Town or city");
+        box.setHint(boxHint);
         box.setHintTextColor(0x66FFFFFF);
         box.setTextColor(0xFFFFFFFF);
         box.setTextSize(TypedValue.COMPLEX_UNIT_PX, screenH * 0.032f);
         box.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
-        box.setInputType(android.text.InputType.TYPE_CLASS_TEXT
-                | android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+        box.setInputType(inputType);
+        if (maxLength > 0) box.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(maxLength)});
         box.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
         GradientDrawable field = new GradientDrawable();
         field.setCornerRadius(screenH * 0.016f);
@@ -2216,9 +2272,9 @@ public final class HomeActivity extends Activity {
         box.setBackground(field);
         int fx = (int) (screenW * 0.012f), fy = (int) (screenH * 0.016f);
         box.setPadding(fx, fy, fx, fy);
-        if (weather.place() != null) {
-            box.setText(weather.place());
-            box.selectAll(); // so typing a new town replaces the old one
+        if (initial != null) {
+            box.setText(initial);
+            box.selectAll(); // so typing replaces the old text
         }
         card.addView(box, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -2230,8 +2286,10 @@ public final class HomeActivity extends Activity {
         back.addView(card, cardLp);
         dialog.setContentView(back);
         box.setOnEditorActionListener((v, action, event) -> {
-            setWeatherPlace(box.getText().toString());
+            // Some keyboards send both a key down and up; answer only once.
+            if (!dialog.isShowing()) return true;
             dialog.dismiss();
+            then.accept(box.getText().toString());
             return true;
         });
         if (dialog.getWindow() != null) {
@@ -2241,6 +2299,123 @@ public final class HomeActivity extends Activity {
         }
         dialog.show();
         box.requestFocus();
+    }
+
+    private static final int PIN_INPUT = android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD;
+
+    /** Asks for the kids mode PIN and runs {@code then} if it is right. Three wrong tries: a 30-second wait. */
+    private void askPin(String heading, final Runnable then) {
+        long wait = pinLockedUntil - android.os.SystemClock.elapsedRealtime();
+        if (wait > 0) {
+            notice("Too many tries. Wait " + ((wait + 999) / 1000) + " seconds");
+            return;
+        }
+        askText(heading, "Type the 4-number PIN, then press done. Back cancels.", "PIN", null,
+                PIN_INPUT, 4, typed -> {
+                    if (apps.checkPin(typed)) {
+                        pinTries = 0;
+                        then.run();
+                    } else if (++pinTries >= 3) {
+                        pinTries = 0;
+                        pinLockedUntil = android.os.SystemClock.elapsedRealtime() + 30_000L;
+                        notice("Wrong PIN. Wait 30 seconds");
+                    } else {
+                        notice("Wrong PIN");
+                    }
+                });
+    }
+
+    /** Asks for a new PIN twice and saves it. */
+    private void chooseNewPin(final Runnable then) {
+        askText("Choose a PIN", "Type 4 numbers, then press done. Back cancels.", "New PIN", null,
+                PIN_INPUT, 4, first -> {
+                    if (!first.matches("[0-9]{4}")) {
+                        notice("The PIN must be 4 numbers");
+                        return;
+                    }
+                    askText("Type it again", "The same 4 numbers, then press done.", "PIN again", null,
+                            PIN_INPUT, 4, second -> {
+                                if (!first.equals(second)) {
+                                    notice("The PINs didn't match");
+                                    return;
+                                }
+                                apps.setPin(first);
+                                notice("PIN saved");
+                                if (then != null) then.run();
+                            });
+                });
+    }
+
+    private void setKidsMode(boolean on) {
+        apps.setKidsOn(on);
+        buildRow();
+        drawerDirty = true;
+        notice(on ? "Kids mode is on" : "Kids mode is off");
+        if (overlay == SETTINGS && "Kids mode".equals(settingsPage) && settingsOption == null) {
+            buildSettingsList("kids_on");
+        }
+    }
+
+    private void buildKidsRows() {
+        settingsHint.setText("Only the chosen apps show. Settings need the PIN.");
+        final boolean on = apps.kidsOn();
+        settingsList.addView(row(-1, "Kids mode", null, on ? "On" : "Off", "kids_on", v -> {
+            if (on) askPin("Enter the PIN", () -> setKidsMode(false));
+            else if (!apps.hasPin()) chooseNewPin(() -> setKidsMode(true));
+            else setKidsMode(true);
+        }));
+        settingsList.addView(row(-1, "Kids' apps", "The apps on the home row in kids mode",
+                String.valueOf(apps.kidsApps().size()), "kids_apps", v -> {
+                    settingsAppPick = 1;
+                    buildSettingsList(null);
+                }));
+        settingsList.addView(row(-1, "Change PIN", apps.hasPin() ? null : "No PIN set yet", "\u203A", "kids_pin",
+                v -> {
+                    if (apps.hasPin()) askPin("Current PIN", () -> chooseNewPin(null));
+                    else chooseNewPin(null);
+                }));
+    }
+
+    /** The kids' apps chooser (OK ticks or unticks) or the hidden apps list (OK shows it again). */
+    private void buildAppPick(String focusTag) {
+        final boolean kids = settingsAppPick == 1;
+        settingsTitle.setText(kids ? "Kids' apps" : "Hidden apps");
+        settingsHint.setText(kids ? "OK adds or removes an app. Back when done."
+                : "OK shows an app again. Back when done.");
+        List<String> chosen = kids ? apps.kidsApps() : apps.hiddenApps();
+        boolean any = false;
+        for (final Apps.App app : all) {
+            if (app.component == null || (!kids && !chosen.contains(app.pkg))) continue;
+            any = true;
+            settingsList.addView(row(-1, app.label, null, kids && chosen.contains(app.pkg) ? "\u2713" : "",
+                    "app:" + app.pkg, v -> {
+                        if (kids) {
+                            List<String> now = apps.kidsApps();
+                            if (!now.remove(app.pkg)) now.add(app.pkg);
+                            apps.setKidsApps(now);
+                        } else {
+                            apps.setHidden(app.pkg, false);
+                            notice(app.label + " is shown again");
+                        }
+                        buildRow();
+                        buildSettingsList("app:" + app.pkg);
+                    }));
+        }
+        if (!any) settingsList.addView(row(-1, "No hidden apps", "Hold OK on an app in All apps to hide it",
+                "", "app:", null));
+        focusTagged(focusTag);
+    }
+
+    /** Gives an app a new name on its tile; an empty name puts its own back. */
+    private void askRename(final Apps.App app) {
+        askText("Rename", "Type a new name, then press done. Leave it empty for the app's own name.",
+                "Name", app.label, android.text.InputType.TYPE_CLASS_TEXT
+                        | android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS, 40, typed -> {
+                    apps.setLabel(app.pkg, typed);
+                    loadApps(false);
+                    notice(typed.trim().isEmpty() ? "Name put back" : "Renamed");
+                });
     }
 
     /** Between ten at night and seven in the morning. */
@@ -2283,6 +2458,20 @@ public final class HomeActivity extends Activity {
 
     private void showOverlay(int which) {
         if (which == overlay) return;
+        if (apps.kidsOn() && which == DRAWER) {
+            // Settings opened from all apps return home instead.
+            if (overlay == SETTINGS) showOverlay(NONE);
+            else notice("Kids mode is on");
+            return;
+        }
+        if (apps.kidsOn() && which == SETTINGS && !kidsUnlocked) {
+            askPin("Enter the PIN", () -> {
+                kidsUnlocked = true;
+                showOverlay(SETTINGS);
+            });
+            return;
+        }
+        if (which != SETTINGS) kidsUnlocked = false;
         if (which == NONE && guideReturn && overlay == DRAWER) {
             guideReturn = false;
             showOverlay(NONE);
@@ -2297,6 +2486,7 @@ public final class HomeActivity extends Activity {
             settingsPage = null;
             settingsOption = null;
             settingsBootPick = false;
+        settingsAppPick = 0;
             restoreArmed = false;
             resetArmed = false;
             settingsGallery = 0;
@@ -2633,6 +2823,10 @@ public final class HomeActivity extends Activity {
                     buildSettingsList("icon_pack");
                 } else if (overlay == SETTINGS && settingsGallery == 4) {
                     showOverlay(settingsFrom); // the tile picker was opened straight from a tile
+                } else if (overlay == SETTINGS && settingsAppPick != 0) {
+                    String tag = settingsAppPick == 1 ? "kids_apps" : "hidden";
+                    settingsAppPick = 0;
+                    buildSettingsList(tag);
                 } else if (overlay == SETTINGS && settingsBootPick) {
                     settingsBootPick = false;
                     buildSettingsList("boot");
@@ -2663,6 +2857,10 @@ public final class HomeActivity extends Activity {
 
     private void launch(Apps.App app) {
         if (app.component == null) return; // placeholder tile
+        if (!apps.kidsAllow(app.pkg)) {
+            notice("Kids mode is on");
+            return;
+        }
         Intent i = new Intent(Intent.ACTION_MAIN);
         i.setComponent(app.component);
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
@@ -2718,6 +2916,7 @@ public final class HomeActivity extends Activity {
     }
 
     private void showHomeTileMenu(final Apps.App app) {
+        if (apps.kidsOn()) return;
         List<MenuItem> items = new ArrayList<>();
         items.add(new MenuItem("Open", () -> launch(app)));
         items.add(new MenuItem("Move", () -> startMove(app)));
@@ -2728,11 +2927,13 @@ public final class HomeActivity extends Activity {
             saveHome(home);
             buildRow();
         }));
+        items.add(new MenuItem("Rename", () -> askRename(app)));
         items.add(new MenuItem("App info", () -> appInfo(app)));
         showMenu(app.label, app, items);
     }
 
     private void showDrawerTileMenu(final Apps.App app) {
+        if (apps.kidsOn()) return;
         final boolean onHome = installedHome().contains(app.pkg);
         List<MenuItem> items = new ArrayList<>();
         items.add(new MenuItem("Open", () -> launch(app)));
@@ -2746,6 +2947,13 @@ public final class HomeActivity extends Activity {
             notice(onHome ? "Removed from home row" : "Added to home row");
         }));
         items.add(new MenuItem("Tile picture", () -> showTileImagePicker(app)));
+        items.add(new MenuItem("Rename", () -> askRename(app)));
+        items.add(new MenuItem("Hide", () -> {
+            apps.setHidden(app.pkg, true);
+            buildRow();
+            buildDrawerGrid();
+            notice("Hidden. Settings \u2192 All apps shows it again");
+        }));
         items.add(new MenuItem("App info", () -> appInfo(app)));
         showMenu(app.label, app, items);
     }

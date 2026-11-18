@@ -63,6 +63,7 @@ final class Prefs {
             new Setting("All apps", "columns", "Columns", 1, "5", "6", "7"),
             new Setting("All apps", "drawer_groups", "Group by type", 1, "Off", "On"),
             new Setting("System", "auto_update", "Check for updates", 1, "Off", "Once a day"),
+            new Setting("System", "lite", "Lite mode", 0, "Off", "On"),
     };
 
     private static final int[] ACCENTS = {0xFFFFFFFF, 0xFF76B900, 0xFF4C8DFF, 0xFFFFB020, 0xFFFF4D4D, 0xFFA070FF};
@@ -71,7 +72,24 @@ final class Prefs {
 
     Prefs(Context ctx) {
         sp = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE);
+        // On a first run on a small TV, start in Lite mode. An existing setup (any saved setting)
+        // keeps its effects, so an update never changes how someone's screen looks.
+        if (!sp.contains("lite") && sp.getAll().isEmpty()) {
+            android.app.ActivityManager am =
+                    (android.app.ActivityManager) ctx.getSystemService(Context.ACTIVITY_SERVICE);
+            if (am != null && (am.isLowRamDevice() || am.getMemoryClass() <= 128)) {
+                sp.edit().putInt("lite", 1).apply();
+            } else {
+                sp.edit().putInt("lite", 0).apply();
+            }
+        }
     }
+
+    /** Lite mode: the moving and costly effects are off, whatever their own settings say. */
+    boolean lite() { return get("lite") == 1; }
+
+    /** Animation speed, read as Fast in Lite mode. */
+    private int anim() { return lite() ? 1 : get("anim"); }
 
     int get(Setting s) {
         int v;
@@ -133,23 +151,23 @@ final class Prefs {
     float saverClockScale() { return new float[]{0f, 0.6f, 1f}[get("saver_clock")]; }
     int saverShade() { return new int[]{0x00, 0x40, 0x80}[get("saver_dim")]; }
     /** Opacity of the light behind the row at its centre, out of 255; 0 = off. */
-    int colourGlow() { return new int[]{0, 0x26, 0x44, 0x78}[get("colour_glow")]; }
+    int colourGlow() { return lite() ? 0 : new int[]{0, 0x26, 0x44, 0x78}[get("colour_glow")]; }
     /** How bright the band of light that crosses a newly selected tile is, out of 255; 0 = off. */
-    int shine() { return new int[]{0, 0x16, 0x30, 0x52}[get("shine")]; }
+    int shine() { return lite() ? 0 : new int[]{0, 0x16, 0x30, 0x52}[get("shine")]; }
     boolean wallpaperAuto() { return get("wp_auto") == 1; }
-    boolean stars() { return get("stars") == 1; }
+    boolean stars() { return !lite() && get("stars") == 1; }
     boolean autoUpdate() { return get("auto_update") == 1; }
 
-    float skyStrength() { return new float[]{0f, 0.55f, 1f}[get("sky")]; }
+    float skyStrength() { return lite() ? 0f : new float[]{0f, 0.55f, 1f}[get("sky")]; }
     boolean nightDim() { return get("night_dim") == 1; }
-    int animMillis() { return new int[]{0, 170, 280}[get("anim")]; }
+    int animMillis() { return new int[]{0, 170, 280}[anim()]; }
     /** Stiffness of the row's scrolling spring; higher settles faster. 0 = jump instantly. */
-    float scrollStiffness() { return new float[]{0f, 17f, 11f}[get("anim")]; }
+    float scrollStiffness() { return new float[]{0f, 17f, 11f}[anim()]; }
     /** While Left or Right is held, the shortest time between steps along the row. */
-    long holdStepMillis() { return new long[]{70L, 105L, 135L}[get("anim")]; }
+    long holdStepMillis() { return new long[]{70L, 105L, 135L}[anim()]; }
     /** 0 = no glow, otherwise its opacity out of 255. */
-    int glowAlpha() { return new int[]{0, 0x70, 0xC8}[get("glow")]; }
-    float glowSpreadFrac() { return new float[]{0f, 0.20f, 0.30f}[get("glow")]; }
+    int glowAlpha() { return lite() ? 0 : new int[]{0, 0x70, 0xC8}[get("glow")]; }
+    float glowSpreadFrac() { return lite() ? 0f : new float[]{0f, 0.20f, 0.30f}[get("glow")]; }
     int dimAlpha() { return new int[]{0, 0x40, 0x80}[get("dim")]; }
     int clockMode() { return get("clock"); }
     boolean clock12h() { return get("clock_fmt") == 1; }
@@ -157,8 +175,8 @@ final class Prefs {
     boolean clockLeft() { return get("clock_pos") == 1; }
     int wallpaperDimAlpha() { return new int[]{0, 0x40, 0x80, 0xB3}[get("wp_dim")]; }
     /** The smallest size the wallpaper is shrunk to when blurring it, as a divisor; 0 = no blur. */
-    int wallpaperBlur() { return new int[]{0, 8, 32}[get("wp_blur")]; }
-    long rotateMillis() { return new long[]{0, 30 * 60000L, 60 * 60000L, 24 * 60 * 60000L}[get("wp_rotate")]; }
+    int wallpaperBlur() { return lite() ? 0 : new int[]{0, 8, 32}[get("wp_blur")]; }
+    long rotateMillis() { return lite() ? 0 : new long[]{0, 30 * 60000L, 60 * 60000L, 24 * 60 * 60000L}[get("wp_rotate")]; }
     boolean downOpensDrawer() { return get("down_opens") == 1; }
     int columns() { return 5 + get("columns"); }
     boolean drawerGroups() { return get("drawer_groups") == 1; }

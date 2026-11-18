@@ -28,7 +28,10 @@ final class Backup {
     static final String BOOT_SEEN = "boot_seen";
     /** Belong to this install, not to the user's choices, so a restore never brings them back. */
     private static final List<String> NOT_RESTORED =
-            Arrays.asList("update_checked", "update_latest", "update_url", "boot_app");
+            Arrays.asList("update_checked", "update_latest", "update_url", "boot_app",
+                    Apps.KIDS_PIN_HASH, Apps.KIDS_PIN_SALT);
+    /** The kids mode PIN never leaves the TV, not even as a hash. */
+    private static final List<String> NOT_SAVED = Arrays.asList(Apps.KIDS_PIN_HASH, Apps.KIDS_PIN_SALT);
 
     private Backup() {
     }
@@ -47,7 +50,8 @@ final class Backup {
                 for (Map.Entry<String, ?> e : ctx.getSharedPreferences(store, Context.MODE_PRIVATE)
                         .getAll().entrySet()) {
                     Object v = e.getValue();
-                    if (e.getKey().equals(BOOT_SEEN) || e.getKey().startsWith("slim_")) continue;
+                    if (e.getKey().equals(BOOT_SEEN) || e.getKey().startsWith("slim_")
+                            || NOT_SAVED.contains(e.getKey())) continue;
                     String type = v instanceof Integer ? "i" : v instanceof Long ? "l"
                             : v instanceof Boolean ? "b" : v instanceof Float ? "f"
                             : v instanceof String ? "s" : null;
@@ -122,7 +126,7 @@ final class Backup {
     }
 
     private static final List<String> STRINGS = Arrays.asList("home_packages", "wallpaper", "icon_pack",
-            "weather_place", "boot_app", "update_latest", "update_url");
+            "weather_place", "boot_app", "update_latest", "update_url", Apps.KIDS_APPS, Apps.HIDDEN_APPS);
     private static final List<String> FLOATS = Arrays.asList("weather_temp", "weather_hi", "weather_lo",
             "weather_lat", "weather_lon");
     private static final List<String> LONGS = Arrays.asList("weather_at", "weather_tried_at", "update_checked",
@@ -131,11 +135,13 @@ final class Backup {
     /** The type code the app reads {@code key} as, or null if it can't tell (then anything goes). */
     private static String expectedType(SharedPreferences sp, String key) {
         for (Prefs.Setting s : Prefs.ALL) if (s.key.equals(key)) return "i";
-        if (STRINGS.contains(key) || key.startsWith("tileimg_")) return "s";
+        if (STRINGS.contains(key) || key.startsWith("tileimg_")
+                || key.startsWith(Apps.LABEL_PREFIX)) return "s";
         if (FLOATS.contains(key)) return "f";
         if (LONGS.contains(key)) return "l";
         if (key.equals("weather_code")) return "i";
-        if (key.equals("weather_day") || key.startsWith("setup_") || key.equals("home_setting_tried")) return "b";
+        if (key.equals("weather_day") || key.startsWith("setup_") || key.equals("home_setting_tried")
+                || key.equals(Apps.KIDS_ON)) return "b";
         Object v = sp.getAll().get(key);
         return v instanceof Integer ? "i" : v instanceof Long ? "l" : v instanceof Boolean ? "b"
                 : v instanceof Float ? "f" : v instanceof String ? "s" : null;

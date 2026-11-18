@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.35
+
+- Kids mode (Settings → Kids mode): the home row shows only the apps you choose, all apps and tile
+  options are locked, and Settings need a 4-number PIN. The PIN is never saved in backups.
+- Rename any app from its tile options, and hide apps from all apps. Settings → All apps → Hidden
+  apps brings them back.
+- Lite mode (Settings → System): turns off the costly effects and animations for slower TVs. On by
+  default on low-memory TVs.
+
 ## 1.34
 
 Stability release, from stress tests on Android TV 12, Google TV 14 (720p, 1 GB), Nvidia Shield
