@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.37
+
+- Online wallpapers (Settings → Wallpaper → Choose wallpaper → Online wallpapers): large landscape
+  photos from Wikimedia Commons' featured pictures and public-domain NASA pictures, fetched only
+  when you open them. OK downloads one into your wallpapers and sets it. Photos keep their
+  creators' credit and licence, shown under the picture and under Choose wallpaper.
+  Hush asks once before going online, Settings → Wallpaper → Online wallpapers can hide it, and
+  it is hidden in kids mode.
+
 ## 1.36
 
 - Tracker blocking with your own service (Settings → Privacy): type a DNS-over-TLS address such

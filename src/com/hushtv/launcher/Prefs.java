@@ -53,6 +53,7 @@ final class Prefs {
             new Setting("Wallpaper", "night_dim", "Darker at night", 0, "Off", "On"),
             new Setting("Wallpaper", "wp_blur", "Wallpaper blur", 0, "Off", "Light", "Strong"),
             new Setting("Wallpaper", "wp_rotate", "Rotate your images", 0, "Off", "Every 30 minutes", "Every hour", "Every day"),
+            new Setting("Wallpaper", "online", "Online wallpapers", 1, "Off", "On"),
             new Setting("Screensaver", "saver_style", "Shows", 0, "Night scenes", "Current wallpaper",
                     "Your pictures", "Clock on black"),
             new Setting("Screensaver", "saver_every", "Change picture", 1, "Every minute", "Every 5 minutes",
@@ -161,6 +162,7 @@ final class Prefs {
     int colourGlow() { return lite() ? 0 : new int[]{0, 0x26, 0x44, 0x78}[get("colour_glow")]; }
     /** How bright the band of light that crosses a newly selected tile is, out of 255; 0 = off. */
     int shine() { return lite() ? 0 : new int[]{0, 0x16, 0x30, 0x52}[get("shine")]; }
+    boolean onlineWallpapers() { return get("online") == 1; }
     boolean wallpaperAuto() { return get("wp_auto") == 1; }
     boolean stars() { return !lite() && get("stars") == 1; }
     boolean autoUpdate() { return get("auto_update") == 1; }

@@ -113,6 +113,10 @@ public final class HomeActivity extends Activity {
      * the device, 3 icon packs, 4 one tile's picture.
      */
     private int settingsGallery;
+    /** The online source being shown (gallery 6): "c:<Commons category>" or "n:<NASA search>". */
+    private String onlineSource;
+    private int onlineGeneration;
+    private boolean onlineDownloading;
     private Apps.App galleryApp;
     private String packBefore;
     private volatile int packGeneration;
@@ -1005,6 +1009,14 @@ public final class HomeActivity extends Activity {
             buildTilePicker();
             return;
         }
+        if (settingsGallery == 5) {
+            buildOnlineSources(focusTag);
+            return;
+        }
+        if (settingsGallery == 6) {
+            buildOnlineGrid();
+            return;
+        }
         if (settingsGallery != 0) {
             buildGallery();
             return;
@@ -1066,7 +1078,7 @@ public final class HomeActivity extends Activity {
         settingsHint.setText(settingsPage.equals("System") ? "Tools for the launcher and the TV."
                 : "OK shows the choices. Left and right step through them.");
         if (settingsPage.equals("Wallpaper")) {
-            settingsList.addView(row(-1, "Choose wallpaper", null, wallpaperName(), "wallpaper", v -> {
+            settingsList.addView(row(-1, "Choose wallpaper", wallpaperCredit(), wallpaperName(), "wallpaper", v -> {
                 wallpaperBefore = currentWallpaper();
                 settingsGallery = 1;
                 buildSettingsList(null);
@@ -1561,6 +1573,15 @@ public final class HomeActivity extends Activity {
     /** The wallpaper to show: the one chosen, or the scene for this time of day. */
     private String currentWallpaper() {
         return prefs.wallpaperAuto() ? sceneForNow() : apps.wallpaper();
+    }
+
+    /** The saved credit of the current wallpaper if it came from the online gallery, else null. */
+    private String wallpaperCredit() {
+        if (prefs.wallpaperAuto()) return null;
+        String value = apps.wallpaper();
+        if (!value.startsWith("file:")) return null;
+        return getSharedPreferences("home", MODE_PRIVATE)
+                .getString("wp_credit_" + new File(value.substring(5)).getName(), null);
     }
 
     private String wallpaperName() {
@@ -2905,6 +2926,13 @@ public final class HomeActivity extends Activity {
                 } else if (overlay == SETTINGS && settingsGallery == 1) {
                     closeGallery();
                     buildSettingsList("wallpaper");
+                } else if (overlay == SETTINGS && settingsGallery == 6) {
+                    settingsGallery = 5; // back from a source's pictures to the list of sources
+                    onlineGeneration++;
+                    buildSettingsList("src:" + onlineSource);
+                } else if (overlay == SETTINGS && settingsGallery == 5) {
+                    settingsGallery = 1;
+                    buildSettingsList(null);
                 } else if (overlay == SETTINGS && settingsGallery == 3) {
                     closeGallery();
                     buildSettingsList("icon_pack");
@@ -3473,6 +3501,10 @@ public final class HomeActivity extends Activity {
         if (!adding) {
             settingsList.addView(row(-1, "Add a picture", "From this device or a USB stick", "\u203A",
                     "add", v -> openDevicePictures()));
+            if (onlineAllowed()) {
+                settingsList.addView(row(-1, "Online wallpapers", "Large photos from Wikimedia Commons and NASA", "\u203A",
+                        "online", v -> openOnline()));
+            }
         }
         final View target = toFocus != null ? toFocus : grid.getChildCount() > 0 ? grid.getChildAt(0)
                 : settingsList.getChildAt(settingsList.getChildCount() - 1);
@@ -3559,6 +3591,245 @@ public final class HomeActivity extends Activity {
                 applyWallpaper();
             });
         });
+    }
+
+    // ---- online wallpapers
+
+    /** Online wallpapers can be hidden in Settings, and are never offered in kids mode. */
+    private boolean onlineAllowed() {
+        return prefs.onlineWallpapers() && !apps.kidsOn();
+    }
+
+    /** Opens the online sources, asking once first, since it is the first contact with Wikimedia Commons and NASA. */
+    private void openOnline() {
+        if (!onlineAllowed()) return;
+        final android.content.SharedPreferences home = getSharedPreferences("home", MODE_PRIVATE);
+        if (home.getBoolean("online_ok", false)) {
+            showOnlineSources();
+            return;
+        }
+        askOk("Online wallpapers", "Pictures come from Wikimedia Commons and NASA. Opening this sends your TV's address"
+                + " to them, like visiting a website. Nothing else is sent.", () -> {
+            home.edit().putBoolean("online_ok", true).apply();
+            showOnlineSources();
+        });
+    }
+
+    private void showOnlineSources() {
+        try {
+            Online.agent = "Hush-TV-launcher/" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName
+                    + " (https://github.com/hush-tv/HushLauncher)";
+        } catch (android.content.pm.PackageManager.NameNotFoundException ignored) {
+        }
+        settingsGallery = 5;
+        buildSettingsList(null);
+    }
+
+    /** The list of online sources: Wikimedia Commons featured-photo categories and NASA searches. */
+    private void buildOnlineSources(String focusTag) {
+        settingsTitle.setText("Online wallpapers");
+        settingsHint.setText("Pictures are only downloaded when you choose one. They stay with their makers:"
+                + " Commons photos keep their creators' credit and licence; NASA's are public domain.");
+        for (final String[] cat : Online.COMMONS) {
+            settingsList.addView(row(-1, cat[0], "Wikimedia Commons: featured photos", "\u203A", "src:c:" + cat[1],
+                    v -> {
+                        onlineSource = "c:" + cat[1];
+                        settingsGallery = 6;
+                        buildSettingsList(null);
+                    }));
+        }
+        for (final String q : Online.NASA) {
+            String name = Character.toUpperCase(q.charAt(0)) + q.substring(1);
+            settingsList.addView(row(-1, name, "NASA, public domain", "›", "src:n:" + q, v -> {
+                onlineSource = "n:" + q;
+                settingsGallery = 6;
+                buildSettingsList(null);
+            }));
+        }
+        if (focusTag != null) focusTagged(focusTag);
+        else settingsList.post(() -> settingsList.getChildAt(0).requestFocus());
+    }
+
+    /** One source's pictures as thumbnails, fetched in the background. */
+    private void buildOnlineGrid() {
+        final String source = onlineSource;
+        final boolean nasa = source.startsWith("n:");
+        final String name = source.substring(2);
+        String shown = name;
+        if (!nasa) {
+            for (String[] cat : Online.COMMONS) if (cat[1].equals(name)) shown = cat[0];
+        }
+        settingsTitle.setText((nasa ? "NASA: " : "Wikimedia Commons: ") + shown);
+        settingsHint.setText("Loading pictures…");
+        final View loading = row(-1, "Loading pictures…", null, "", "loading", null);
+        settingsList.addView(loading);
+        settingsList.post(loading::requestFocus);
+        final int generation = ++onlineGeneration;
+        runInBackground(() -> {
+            List<Online.Item> found = null;
+            try {
+                found = nasa ? Online.nasa(name) : Online.commons(name);
+            } catch (IOException | RuntimeException ignored) {
+            }
+            final List<Online.Item> items = found;
+            runOnUiThread(() -> {
+                if (isDestroyed() || generation != onlineGeneration || overlay != SETTINGS
+                        || settingsGallery != 6) return;
+                settingsList.removeAllViews();
+                if (items == null || items.isEmpty()) {
+                    settingsHint.setText("");
+                    View retry = row(-1, "Couldn't load pictures", "Check the internet and try again. OK tries again",
+                            "", "retry", v -> buildSettingsList(null));
+                    settingsList.addView(retry);
+                    settingsList.post(retry::requestFocus);
+                    notice("Couldn't load pictures. Check the internet and try again");
+                    return;
+                }
+                showOnlineItems(items);
+            });
+        });
+    }
+
+    private void showOnlineItems(List<Online.Item> items) {
+        settingsHint.setText("OK downloads a picture and sets it as your wallpaper.");
+        int thumbW = thumbWidth(2);
+        final GridLayout grid = thumbGrid();
+        for (int i = 0; i < items.size(); i++) {
+            final Online.Item item = items.get(i);
+            final ThumbView thumb = new ThumbView(this, item.title, thumbW);
+            thumb.setOnFocusChangeListener((v, has) -> {
+                if (has) settingsHint.setText(item.credit + ". OK sets it as your wallpaper.");
+            });
+            thumb.setOnClickListener(v -> downloadOnline(item));
+            addThumb(grid, thumb, i, 2);
+            loadOnlineThumb(thumb, item.thumb);
+        }
+        settingsList.addView(grid);
+        settingsList.post(() -> grid.getChildAt(0).requestFocus());
+    }
+
+    /** Fetches and shows one online thumbnail; a picture that turns out not to be landscape is left out. */
+    private void loadOnlineThumb(final ThumbView thumb, final String url) {
+        Bitmap kept = THUMBS.get(url);
+        if (kept != null) {
+            thumb.setBitmap(kept);
+            return;
+        }
+        runThumb(() -> {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
+            Bitmap bmp = null;
+            boolean failed = false;
+            try {
+                bmp = Online.thumbnail(url, 320, 180);
+            } catch (IOException | RuntimeException | OutOfMemoryError e) {
+                failed = true; // no picture, but keep the card: it may still download
+            }
+            final Bitmap result = Apps.gpuOnly(bmp);
+            final boolean hide = result == null && !failed;
+            if (result != null) synchronized (THUMBS) { THUMBS.put(url, result); }
+            runOnUiThread(() -> {
+                if (isDestroyed()) return;
+                if (!hide) {
+                    thumb.setBitmap(result);
+                    return;
+                }
+                if (thumb.isFocused()) {
+                    View next = thumb.focusSearch(View.FOCUS_RIGHT);
+                    if (next == null) next = thumb.focusSearch(View.FOCUS_DOWN);
+                    if (next != null) next.requestFocus();
+                }
+                thumb.setVisibility(View.GONE);
+            });
+        });
+    }
+
+    /** Downloads the full picture into your wallpapers and sets it. */
+    private void downloadOnline(final Online.Item item) {
+        if (onlineDownloading) return;
+        onlineDownloading = true;
+        notice("Downloading…");
+        runInBackground(() -> {
+            File dest = null;
+            try {
+                dest = Online.fileFor(wallpaperDir(), item);
+                synchronized (THUMBS) { THUMBS.remove("file:" + dest.getAbsolutePath()); }
+                Online.download(item, dest);
+            } catch (IOException | RuntimeException e) {
+                dest = null;
+            }
+            final File saved = dest;
+            runOnUiThread(() -> {
+                onlineDownloading = false;
+                if (isDestroyed()) return;
+                if (saved == null) {
+                    notice("Couldn't load pictures. Check the internet and try again");
+                    return;
+                }
+                getSharedPreferences("home", MODE_PRIVATE).edit()
+                        .putString("wp_credit_" + saved.getName(), item.credit).apply();
+                apps.setWallpaper("file:" + saved.getAbsolutePath());
+                prefs.set("wp_auto", 0);
+                wallpaperBefore = apps.wallpaper();
+                applyWallpaper();
+                notice("Wallpaper saved");
+            });
+        });
+    }
+
+    /** A short question with OK and Cancel; {@code then} runs only on OK. */
+    private void askOk(String heading, String message, final Runnable then) {
+        final android.app.Dialog dialog = new android.app.Dialog(this,
+                android.R.style.Theme_Translucent_NoTitleBar_Fullscreen);
+        FrameLayout back = new FrameLayout(this);
+        back.setBackgroundColor(0x99000000);
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (screenW * 0.022f);
+        card.setPadding(pad, (int) (screenH * 0.036f), pad, (int) (screenH * 0.032f));
+        card.setBackground(cardBackground(screenH * 0.030f));
+        card.setElevation(screenH * 0.03f);
+        TextView title = text(screenH * 0.038f, 0xFFFFFFFF, "sans-serif-light");
+        title.setText(heading);
+        card.addView(title);
+        TextView body = text(screenH * 0.024f, 0xCCFFFFFF, "sans-serif");
+        body.setText(message);
+        body.setPadding(0, (int) (screenH * 0.012f), 0, (int) (screenH * 0.024f));
+        card.addView(body);
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        TextView ok = askButton("OK"), cancel = askButton("Cancel");
+        LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        gap.rightMargin = (int) (screenW * 0.012f);
+        buttons.addView(ok, gap);
+        buttons.addView(cancel);
+        card.addView(buttons);
+        back.addView(card, new FrameLayout.LayoutParams((int) (screenW * 0.42f),
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        dialog.setContentView(back);
+        ok.setOnClickListener(v -> {
+            if (!dialog.isShowing()) return;
+            dialog.dismiss();
+            then.run();
+        });
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        dialog.show();
+        ok.requestFocus();
+    }
+
+    private TextView askButton(String label) {
+        TextView b = text(screenH * 0.028f, 0xFFFFFFFF, "sans-serif");
+        b.setText(label);
+        int px = (int) (screenW * 0.016f), py = (int) (screenH * 0.012f);
+        b.setPadding(px, py, px, py);
+        b.setFocusable(true);
+        b.setClickable(true);
+        final GradientDrawable on = new GradientDrawable();
+        on.setCornerRadius(screenH * 0.016f);
+        on.setColor(0xFF262B34);
+        on.setStroke(Math.max(2, (int) (screenH * 0.0028f)), prefs.accent());
+        b.setOnFocusChangeListener((v, has) -> v.setBackground(has ? on : null));
+        return b;
     }
 
     /** Moves to the next of your own images when the chosen interval has passed. */

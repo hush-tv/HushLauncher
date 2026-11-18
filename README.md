@@ -78,8 +78,9 @@ the download link on GitHub.
 
 **What Hush collects:** Hush itself collects nothing: no account, analytics, crash reporting or
 ads. Two optional features talk to outside services, which see your IP address like any website:
-the daily update check (GitHub, see [Updates](#updates)), which can be switched off, and the
-weather (Open-Meteo, see [Weather](#weather)), off by default.
+the daily update check (GitHub, see [Updates](#updates)), which can be switched off, the
+weather (Open-Meteo, see [Weather](#weather)), off by default, and online wallpapers (Wikimedia
+Commons and NASA, see [Customisation](#customisation)), contacted only when you open them, after asking once.
 
 **Tracker blocking (Android 9 or newer):** Settings → Privacy can switch the TV to an encrypted DNS service that
 refuses to look up known advertising and tracking domains. It applies to every app on the TV
@@ -249,6 +250,15 @@ Hush reads these folders under `/sdcard/Android/data/com.hushtv.launcher/files/`
 | `packs/<Pack name>/` | An icon pack as a folder of images named after each app's package |
 
 Files can be copied with `adb push` or from a USB drive using the TV's file manager.
+
+**Online wallpapers:** Settings → Wallpaper → Choose wallpaper → **Online wallpapers** shows large
+landscape photos from Wikimedia Commons' featured pictures (landscapes, mountains, coasts, lakes,
+waterfalls, sunsets, snow, forests, cities and astronomy) and public-domain pictures from NASA's
+image library. Nothing is bundled with Hush and nothing is fetched until you open it; OK on a
+thumbnail downloads that one picture (up to 25 MB) into `wallpapers/` and sets it. Pictures belong
+to their makers: Commons photos keep their creators' credit and licence, shown under the selected
+one and under Choose wallpaper once set. The first time, Hush asks before going online. Settings →
+Wallpaper → Online wallpapers → Off hides it, and it is never shown in kids mode.
 
 To rename an app, hold OK on its tile and choose Rename; leave the name empty to put its own back.
 To hide an app, hold OK on it in all apps and choose Hide. Hidden apps are listed in
